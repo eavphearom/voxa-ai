@@ -1,0 +1,191 @@
+import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
+import { useMemo, useState } from 'react'
+
+const presets = [
+  { label: 'Today', days: 0 },
+  { label: 'Last 7 days', days: 7 },
+  { label: 'Last 14 days', days: 14 },
+  { label: 'Last 30 days', days: 30 },
+  { label: 'Last 3 months', days: 90 },
+  { label: 'Last 6 months', days: 180 },
+  { label: 'Last year', days: 365 },
+]
+
+const monthNames = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+]
+
+const weekDays = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+
+const toDateValue = (date) => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const formatDisplay = (value) => {
+  const [year, month, day] = value.split('-')
+  return `${Number(month)} / ${Number(day)} / ${year}`
+}
+
+const buildMonthDays = (year, month) => {
+  const first = new Date(year, month, 1)
+  const start = new Date(first)
+  start.setDate(first.getDate() - first.getDay())
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(start)
+    date.setDate(start.getDate() + index)
+    return {
+      value: toDateValue(date),
+      day: date.getDate(),
+      muted: date.getMonth() !== month,
+    }
+  })
+}
+
+function DateFilter({ value, onChange }) {
+  const [open, setOpen] = useState(false)
+  const [viewDate, setViewDate] = useState(new Date('2026-05-01'))
+
+  const rightDate = useMemo(() => new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 1), [viewDate])
+
+  const setPreset = (days) => {
+    const end = new Date()
+    const start = new Date()
+    start.setDate(end.getDate() - days)
+    onChange({ start: toDateValue(start), end: toDateValue(end) })
+  }
+
+  const chooseDate = (date) => {
+    if (!value.start || value.start !== value.end) {
+      onChange({ start: date, end: date })
+      return
+    }
+
+    if (date < value.start) {
+      onChange({ start: date, end: value.start })
+    } else {
+      onChange({ start: value.start, end: date })
+    }
+  }
+
+  const moveMonth = (direction) => {
+    setViewDate((date) => new Date(date.getFullYear(), date.getMonth() + direction, 1))
+  }
+
+  const displayText = `${formatDisplay(value.start)} - ${formatDisplay(value.end)}`
+
+  return (
+    <div className="relative w-full sm:w-auto">
+      <button
+        type="button"
+        onClick={() => setOpen((state) => !state)}
+        className="flex h-11 w-full items-center gap-3 rounded-xl border border-border-soft bg-white px-4 text-left shadow-sm transition hover:border-primary hover:shadow-md sm:w-[300px]"
+      >
+        <Calendar size={18} className="text-primary" />
+        <span className="truncate text-sm font-medium text-text-primary">{displayText}</span>
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-14 z-40 w-[min(92vw,760px)] overflow-hidden rounded-2xl border border-border-soft bg-white shadow-2xl animate-fade-in">
+          <div className="grid md:grid-cols-[190px_1fr]">
+            <aside className="border-b border-border-soft bg-sidebar p-3 md:border-b-0 md:border-r">
+              {presets.map((preset) => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  onClick={() => setPreset(preset.days)}
+                  className="block w-full rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-slate-700 transition hover:bg-[#EAFBF3] hover:text-primary"
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </aside>
+
+            <section className="p-4">
+              <div className="mb-4 flex items-center justify-between">
+                <div className="flex gap-1">
+                  <button type="button" onClick={() => moveMonth(-2)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Previous two months">
+                    <ChevronLeft size={17} />
+                  </button>
+                  <button type="button" onClick={() => moveMonth(-1)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Previous month">
+                    <ChevronLeft size={17} />
+                  </button>
+                </div>
+                <h3 className="text-sm font-semibold text-text-primary">
+                  {monthNames[viewDate.getMonth()]} - {monthNames[rightDate.getMonth()]} {rightDate.getFullYear()}
+                </h3>
+                <div className="flex gap-1">
+                  <button type="button" onClick={() => moveMonth(1)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Next month">
+                    <ChevronRight size={17} />
+                  </button>
+                  <button type="button" onClick={() => moveMonth(2)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Next two months">
+                    <ChevronRight size={17} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid gap-6 md:grid-cols-2">
+                <MonthGrid date={viewDate} range={value} onChoose={chooseDate} />
+                <MonthGrid date={rightDate} range={value} onChoose={chooseDate} />
+              </div>
+            </section>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function MonthGrid({ date, range, onChoose }) {
+  const days = buildMonthDays(date.getFullYear(), date.getMonth())
+
+  return (
+    <div>
+      <div className="mb-2 grid grid-cols-7 text-center text-xs font-bold text-primary">
+        {weekDays.map((day, index) => (
+          <span key={`${day}-${index}`}>{day}</span>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-1 text-center">
+        {days.map((day) => {
+          const selected = day.value === range.start || day.value === range.end
+          const inRange = day.value > range.start && day.value < range.end
+          return (
+            <button
+              key={day.value}
+              type="button"
+              onClick={() => onChoose(day.value)}
+              className={`h-9 rounded-full text-sm transition ${
+                selected
+                  ? 'bg-primary font-bold text-white shadow-sm'
+                  : inRange
+                    ? 'bg-[#EAFBF3] text-primary'
+                    : day.muted
+                      ? 'text-slate-300 hover:bg-slate-50'
+                      : 'text-slate-700 hover:bg-[#EAFBF3] hover:text-primary'
+              }`}
+            >
+              {day.day}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+export default DateFilter
