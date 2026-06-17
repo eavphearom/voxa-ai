@@ -1,33 +1,30 @@
 import { KeyRound, Mail, Phone, UserRound } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import AuthLayout, { AuthInput } from '../components/AuthLayout'
+import { getAuthToken, loginUser, persistAuth, registerUser } from '../services/authApi'
 
 const registerFields = [
   {
     id: 'name',
     label: 'Username',
-    defaultValue: 'sok dara',
     icon: UserRound,
   },
   {
     id: 'email',
     label: 'Email',
-    defaultValue: 'dara@gmail.com',
     icon: Mail,
     type: 'email',
   },
   {
     id: 'phone',
     label: 'Phone Number',
-    defaultValue: '***********',
     icon: Phone,
     type: 'tel',
-    showPasswordIcon: true,
   },
   {
     id: 'password',
     label: 'Password',
-    defaultValue: '***********',
     icon: KeyRound,
     type: 'password',
     showPasswordIcon: true,
@@ -35,7 +32,6 @@ const registerFields = [
   {
     id: 'confirmPassword',
     label: 'Confirm Password',
-    defaultValue: '***********',
     icon: KeyRound,
     type: 'password',
     showPasswordIcon: true,
@@ -43,18 +39,84 @@ const registerFields = [
 ]
 
 function Register() {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const [form, setForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    password: '',
+    confirmPassword: '',
+  })
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const updateField = (event) => {
+    setForm((values) => ({ ...values, [event.target.name]: event.target.value }))
+  }
+
+  const submit = async (event) => {
+    event.preventDefault()
+    setError('')
+
+    if (form.password !== form.confirmPassword) {
+      setError('Password and confirm password do not match.')
+      return
+    }
+
+    setLoading(true)
+
+    try {
+      const data = await registerUser({
+        name: form.name,
+        email: form.email,
+        phone: form.phone,
+        password: form.password,
+        password_confirmation: form.confirmPassword,
+      })
+      persistAuth(data)
+
+      if (!getAuthToken()) {
+        const loginData = await loginUser({
+          email: form.email,
+          password: form.password,
+        })
+        persistAuth(loginData)
+      }
+
+      navigate(location.state?.from?.pathname || '/', { replace: true })
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <AuthLayout title="Create account">
-      <form>
+      <form onSubmit={submit}>
         {registerFields.map((field) => (
-          <AuthInput key={field.id} {...field} />
+          <AuthInput
+            key={field.id}
+            {...field}
+            name={field.id}
+            value={form[field.id]}
+            onChange={updateField}
+          />
         ))}
 
+        {error && (
+          <div className="mt-6 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+            {error}
+          </div>
+        )}
+
         <button
-          type="button"
-          className="mt-10 h-14 w-full rounded-md bg-primary text-lg font-bold text-white transition hover:bg-emerald-600 sm:mt-12"
+          type="submit"
+          disabled={loading}
+          className="mt-10 h-14 w-full rounded-md bg-primary text-lg font-bold text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-70 sm:mt-12"
         >
-          create account
+          {loading ? 'Creating account...' : 'create account'}
         </button>
       </form>
 

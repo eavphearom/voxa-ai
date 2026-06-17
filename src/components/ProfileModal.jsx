@@ -1,14 +1,14 @@
 import { Mail, Phone, UserRound, X } from 'lucide-react'
 import { createPortal } from 'react-dom'
-import { user } from '../data/mockData'
+import { DEFAULT_AVATAR } from '../services/authApi'
 
-function ProfileModal({ open, onClose }) {
+function ProfileModal({ open, onClose, user }) {
   if (!open) return null
 
   const fields = [
-    { label: 'Name', value: user.name.toLowerCase(), icon: UserRound },
-    { label: 'Email account', value: user.email, icon: Mail },
-    { label: 'Mobile number', value: user.phone, icon: Phone },
+    { label: 'Name', value: user?.name || 'User', icon: UserRound },
+    { label: 'Email account', value: user?.email || 'No email', icon: Mail },
+    { label: 'Mobile number', value: user?.phone || 'No phone', icon: Phone },
   ]
 
   return createPortal(
@@ -24,12 +24,12 @@ function ProfileModal({ open, onClose }) {
 
           <div className="flex items-center gap-4">
             <div className="relative rounded-2xl bg-white p-1 shadow-sm">
-              <img src={user.avatar} alt="Admin" className="h-20 w-20 rounded-2xl object-cover" />
+              <img src={user?.avatar || DEFAULT_AVATAR} alt={user?.name || 'User'} className="h-20 w-20 rounded-2xl object-cover" />
               <span className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full border-4 border-white bg-primary" />
             </div>
             <div>
-              <h2 className="text-2xl font-semibold text-text-primary">{user.name.toLowerCase()}</h2>
-              <p className="mt-1 text-sm text-text-secondary">{user.email}</p>
+              <h2 className="text-2xl font-semibold text-text-primary">{user?.name || 'User'}</h2>
+              <p className="mt-1 text-sm text-text-secondary">{user?.email || 'No email'}</p>
               <span className="mt-3 inline-flex rounded-full bg-white px-3 py-1 text-xs font-semibold text-primary">
                 Active account
               </span>

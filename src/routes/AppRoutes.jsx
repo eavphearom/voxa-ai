@@ -9,22 +9,28 @@ import Record from '../pages/Record'
 import Register from '../pages/Register'
 import Settings from '../pages/Settings'
 import VoxaAI from '../pages/VoxaAI'
+import ProtectedRoute from './ProtectedRoute'
+import PublicRoute from './PublicRoute'
 
 function AppRoutes() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route element={<MainLayout />}>
-          <Route path="/" element={<Home />} />
-          <Route path="/voxa-ai" element={<VoxaAI />} />
-          <Route path="/voxa-ai/:chatId" element={<VoxaAI />} />
-          <Route path="/record" element={<Record />} />
-          <Route path="/meeting/:id" element={<MeetingDetail />} />
-          <Route path="/history/:id" element={<History />} />
-          <Route path="/communication/:id" element={<Communication />} />
-          <Route path="/settings" element={<Settings />} />
+        <Route element={<PublicRoute />}>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+        </Route>
+        <Route element={<ProtectedRoute />}>
+          <Route element={<MainLayout />}>
+            <Route path="/" element={<Home />} />
+            <Route path="/voxa-ai" element={<VoxaAI />} />
+            <Route path="/voxa-ai/:chatId" element={<VoxaAI />} />
+            <Route path="/record" element={<Record />} />
+            <Route path="/meeting/:id" element={<MeetingDetail />} />
+            <Route path="/history/:id" element={<History />} />
+            <Route path="/communication/:id" element={<Communication />} />
+            <Route path="/settings" element={<Settings />} />
+          </Route>
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

@@ -16,16 +16,16 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import ConfirmDialog from './ConfirmDialog'
 import FolderModal from './FolderModal'
 import Logo from './Logo'
 import UserDropdown from './UserDropdown'
-import { communicationItems, recentItems, user } from '../data/mockData'
+import { communicationItems, recentItems } from '../data/mockData'
 
 const navLinkClass = ({ isActive }) =>
-  `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ease-in-out ${
+  `flex items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] font-semibold transition-all duration-200 ease-in-out ${
     isActive ? 'bg-primary text-white shadow-sm' : 'text-text-primary hover:bg-white hover:shadow-sm'
   }`
 
@@ -37,7 +37,10 @@ function Sidebar({
   onOpenProfile,
   onCloseMobile,
   onToggleCollapse,
+  onLogout,
+  authUser,
   generalChats = [],
+  chatsLoading = false,
   onCreateGeneralChat,
   onRenameGeneralChat,
   onDeleteGeneralChat,
@@ -150,10 +153,40 @@ function Sidebar({
     ? decodeURIComponent(location.pathname.split('/').pop())
     : null
 
-  const createGeneralChat = () => {
-    const id = onCreateGeneralChat?.()
+  const createGeneralChat = async () => {
+    const id = await onCreateGeneralChat?.(activeGeneralChatId)
     if (id) navigate(`/voxa-ai/${id}`)
   }
+
+  useEffect(() => {
+    if (!folderMenuId && !historyMenuId) {
+      return undefined
+    }
+
+    const closeOpenMenus = (event) => {
+      if (event.target.closest('[data-sidebar-action-menu]')) {
+        return
+      }
+
+      setFolderMenuId(null)
+      setHistoryMenuId(null)
+    }
+
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') {
+        setFolderMenuId(null)
+        setHistoryMenuId(null)
+      }
+    }
+
+    document.addEventListener('pointerdown', closeOpenMenus)
+    document.addEventListener('keydown', closeOnEscape)
+
+    return () => {
+      document.removeEventListener('pointerdown', closeOpenMenus)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [folderMenuId, historyMenuId])
 
   return (
     <>
@@ -177,7 +210,7 @@ function Sidebar({
       </div>
 
       <div className="sidebar-scroll min-h-0 flex-1 overflow-y-auto pr-1">
-        <nav className="space-y-2">
+        <nav className="relative z-40 space-y-2">
           <NavLink to="/" className={navLinkClass}>
             <Grid2X2 size={18} />
             <span className={labelClass}>Home</span>
@@ -185,7 +218,7 @@ function Sidebar({
           <button
             type="button"
             onClick={() => toggleSection('voxa')}
-            className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
+            className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-[15px] font-semibold transition-all duration-200 ${
               location.pathname.startsWith('/voxa-ai') ? 'bg-primary text-white shadow-sm' : 'text-text-primary hover:bg-white hover:shadow-sm'
             }`}
           >
@@ -196,15 +229,23 @@ function Sidebar({
             {!collapsed && (openSections.voxa ? <ChevronUp size={15} /> : <ChevronDown size={15} />)}
           </button>
           {openSections.voxa && !collapsed && (
-            <div className="space-y-1 pl-4 animate-fade-in">
+            <div className="relative z-50 space-y-1 pl-4 animate-fade-in">
               <button
                 type="button"
                 onClick={createGeneralChat}
-                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-primary transition hover:bg-white"
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[15px] font-semibold text-primary transition hover:bg-white"
               >
                 <FolderPlus size={15} />
                 New Chat
               </button>
+              {chatsLoading && (
+                <p className="px-3 py-2 text-xs font-medium text-text-secondary">Loading chats...</p>
+              )}
+              {!chatsLoading && generalChats.length === 0 && (
+                <p className="px-3 py-2 text-xs font-medium text-text-secondary">
+                  No chat history yet
+                </p>
+              )}
               {generalChats.map((chat) => {
                 const path = `/voxa-ai/${chat.id}`
                 return (
@@ -234,13 +275,13 @@ function Sidebar({
           )}
         </nav>
 
-      <div className="mt-6">
+      <div className="relative z-10 mt-6">
         <p className={`mb-3 text-[11px] font-medium uppercase text-text-secondary ${labelClass}`}>Communication</p>
-        <div className="space-y-1 text-sm font-semibold text-text-primary">
+        <div className="space-y-1 text-[15px] font-semibold text-text-primary">
           <button
             type="button"
             onClick={() => setFolderModal({ open: true, mode: 'create', folder: null })}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-primary transition-all duration-200 hover:bg-white hover:shadow-sm"
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-[15px] font-semibold text-primary transition-all duration-200 hover:bg-white hover:shadow-sm"
           >
             <FolderPlus size={17} />
             <span className={`truncate ${labelClass}`}>Create New Folder</span>
@@ -253,7 +294,7 @@ function Sidebar({
                 <NavLink
                   to={item.path}
                   onClick={() => item.children.length && toggleSection(item.id)}
-                  className="group flex w-full items-center justify-between rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200 hover:bg-white"
+                  className="group flex w-full items-center justify-between rounded-xl px-3 py-2 text-[15px] font-semibold transition-all duration-200 hover:bg-white"
                 >
                   <span className="flex min-w-0 items-center gap-3">
                     <Icon size={17} />
@@ -262,6 +303,7 @@ function Sidebar({
                   {!collapsed && (
                     <span className="ml-2 flex shrink-0 items-center gap-1">
                       <button
+                        data-sidebar-action-menu
                         type="button"
                         onClick={(event) => {
                           event.preventDefault()
@@ -274,6 +316,7 @@ function Sidebar({
                         <Edit3 size={14} />
                       </button>
                       <button
+                        data-sidebar-action-menu
                         type="button"
                         onClick={(event) => {
                           event.preventDefault()
@@ -290,11 +333,11 @@ function Sidebar({
                   )}
                 </NavLink>
                 {folderMenuId === item.id && !collapsed && (
-                  <div className="absolute left-10 right-0 top-11 z-50 rounded-2xl border border-border-soft bg-white p-2 text-text-primary shadow-lg animate-fade-in">
+                  <div data-sidebar-action-menu className="absolute left-10 right-0 top-11 z-50 rounded-2xl border border-border-soft bg-white p-2 text-text-primary shadow-lg animate-fade-in">
                     <button
                       type="button"
                       onClick={() => shareFolder(item)}
-                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition hover:bg-[#EAFBF3] hover:text-primary"
+                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[15px] font-semibold transition hover:bg-[#EAFBF3] hover:text-primary"
                     >
                       <Share2 size={18} />
                       Share project
@@ -305,7 +348,7 @@ function Sidebar({
                         setFolderMenuId(null)
                         setFolderModal({ open: true, mode: 'rename', folder: item })
                       }}
-                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition hover:bg-[#EAFBF3] hover:text-primary"
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[15px] font-semibold transition hover:bg-[#EAFBF3] hover:text-primary"
                     >
                       <Pencil size={18} />
                       Rename project
@@ -313,7 +356,7 @@ function Sidebar({
                     <button
                       type="button"
                       onClick={() => setDeleteFolder(item)}
-                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-red-500 transition hover:bg-red-50"
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[15px] font-semibold text-red-500 transition hover:bg-red-50"
                     >
                       <Trash2 size={18} />
                       Delete project
@@ -323,7 +366,7 @@ function Sidebar({
                 {!!item.children.length && isOpen && !collapsed && (
                   <div className="ml-8 mt-1 space-y-1">
                     {item.children.map((child) => (
-                      <NavLink key={child.id} to={child.path} className="block rounded-lg px-3 py-1.5 text-xs text-slate-600 transition hover:bg-white">
+                      <NavLink key={child.id} to={child.path} className="block rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:bg-white">
                         {child.label}
                       </NavLink>
                     ))}
@@ -335,7 +378,7 @@ function Sidebar({
         </div>
       </div>
 
-      <div className="mt-5">
+      <div className="relative z-0 mt-5">
         <button type="button" onClick={() => toggleSection('recent')} className={`mb-2 flex w-full items-center justify-between px-3 text-[11px] text-text-secondary ${collapsed ? 'lg:hidden' : ''}`}>
           <span>Recent Meetings</span>
           {openSections.recent ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -369,28 +412,29 @@ function Sidebar({
       </div>
 
       <div className="mt-4 shrink-0 space-y-2 border-t border-border-soft pt-3">
-        <button type="button" className="flex w-full items-center gap-3 rounded-xl bg-white px-3 py-2 text-xs font-medium text-text-primary transition hover:shadow-sm">
+        <button type="button" className="flex w-full items-center gap-3 rounded-xl bg-white px-3 py-2.5 text-[15px] font-semibold text-text-primary transition hover:shadow-sm">
           <HelpCircle size={15} />
           <span className={labelClass}>Help</span>
         </button>
-        <NavLink to="/settings" className="flex items-center gap-3 rounded-xl bg-white px-3 py-2 text-xs font-medium text-text-primary transition hover:shadow-sm">
+        <NavLink to="/settings" className="flex items-center gap-3 rounded-xl bg-white px-3 py-2.5 text-[15px] font-semibold text-text-primary transition hover:shadow-sm">
           <Settings size={15} />
           <span className={labelClass}>Settings</span>
         </NavLink>
         <button
+          data-sidebar-action-menu
           type="button"
           onClick={onToggleDropdown}
           className="flex w-full items-center gap-3 rounded-xl bg-white p-3 text-left transition hover:shadow-sm"
         >
-          <img src={user.avatar} alt="Admin" className="h-8 w-8 rounded-full object-cover" />
+          <img src={authUser.avatar} alt={authUser.name} className="h-8 w-8 rounded-full object-cover" />
           <span className={`min-w-0 ${labelClass}`}>
-            <span className="block text-xs font-semibold text-text-primary">{user.name}</span>
-            <span className="block truncate text-[11px] text-text-secondary">{user.email}</span>
+            <span className="block text-sm font-semibold text-text-primary">{authUser.name}</span>
+            <span className="block truncate text-xs text-text-secondary">{authUser.email}</span>
           </span>
         </button>
       </div>
 
-      {dropdownOpen && <UserDropdown onProfile={onOpenProfile} />}
+      {dropdownOpen && <UserDropdown user={authUser} onProfile={onOpenProfile} onLogout={onLogout} />}
     </aside>
     <FolderModal
       key={`${folderModal.mode}-${folderModal.folder?.id || 'new'}`}
@@ -445,11 +489,11 @@ function HistoryNavItem({
   deleteLabel,
 }) {
   return (
-    <div className="relative">
+    <div className={`relative ${menuOpen ? 'z-[999]' : 'z-0'}`}>
       <NavLink
         to={to}
         className={({ isActive }) =>
-          `group flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
+          `group flex items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-[15px] font-semibold transition ${
             active || isActive ? 'bg-[#EAFBF3] text-primary' : 'text-slate-700 hover:bg-white'
           }`
         }
@@ -470,11 +514,11 @@ function HistoryNavItem({
       </NavLink>
 
       {menuOpen && (
-        <div className="absolute left-8 right-0 top-10 z-50 rounded-2xl border border-border-soft bg-white p-2 text-text-primary shadow-lg animate-fade-in">
+        <div data-sidebar-action-menu className="absolute right-0 top-full z-[1000] mt-2 w-[205px] rounded-2xl border border-border-soft bg-white p-2 text-text-primary shadow-xl animate-fade-in">
           <button
             type="button"
             onClick={onShare}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition hover:bg-[#EAFBF3] hover:text-primary"
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[15px] font-semibold transition hover:bg-[#EAFBF3] hover:text-primary"
           >
             <Share2 size={17} />
             Share
@@ -482,7 +526,7 @@ function HistoryNavItem({
           <button
             type="button"
             onClick={onRename}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition hover:bg-[#EAFBF3] hover:text-primary"
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[15px] font-semibold transition hover:bg-[#EAFBF3] hover:text-primary"
           >
             <Pencil size={17} />
             {renameLabel}
@@ -490,7 +534,7 @@ function HistoryNavItem({
           <button
             type="button"
             onClick={onDelete}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-red-500 transition hover:bg-red-50"
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[15px] font-semibold text-red-500 transition hover:bg-red-50"
           >
             <Trash2 size={17} />
             {deleteLabel}

@@ -1,4 +1,5 @@
-import { Eye } from 'lucide-react'
+import { Eye, EyeOff } from 'lucide-react'
+import { useState } from 'react'
 import heroImg from '../assets/hero.png'
 import Logo from './Logo'
 
@@ -31,19 +32,45 @@ function AuthLayout({ title, children }) {
   )
 }
 
-export function AuthInput({ icon: Icon, label, defaultValue, type = 'text', showPasswordIcon = false }) {
+export function AuthInput({
+  icon: Icon,
+  label,
+  defaultValue,
+  type = 'text',
+  showPasswordIcon = false,
+  name,
+  value,
+  onChange,
+  required = true,
+}) {
+  const [visible, setVisible] = useState(false)
+  const inputType = showPasswordIcon ? (visible ? 'text' : 'password') : type
+
   return (
     <label className="mb-4 flex h-14 items-center gap-4 rounded-md bg-zinc-100 px-4 transition focus-within:ring-4 focus-within:ring-primary/15">
       <Icon size={22} className="shrink-0 text-zinc-700" />
       <span className="min-w-0 flex-1">
         <span className="block text-[10px] font-medium text-text-secondary">{label}</span>
         <input
-          type={type}
-          defaultValue={defaultValue}
+          name={name}
+          type={inputType}
+          value={value}
+          onChange={onChange}
+          defaultValue={value === undefined ? defaultValue : undefined}
+          required={required}
           className="w-full bg-transparent text-sm font-semibold text-text-primary outline-none"
         />
       </span>
-      {showPasswordIcon && <Eye size={17} className="shrink-0 text-zinc-800" />}
+      {showPasswordIcon && (
+        <button
+          type="button"
+          onClick={() => setVisible((value) => !value)}
+          className="shrink-0 rounded-md p-1 text-zinc-800 transition hover:bg-white"
+          aria-label={visible ? 'Hide password' : 'Show password'}
+        >
+          {visible ? <EyeOff size={17} /> : <Eye size={17} />}
+        </button>
+      )}
     </label>
   )
 }

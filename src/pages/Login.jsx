@@ -1,19 +1,19 @@
 import { KeyRound, Mail } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import AuthLayout, { AuthInput, GoogleButton, OrDivider } from '../components/AuthLayout'
+import { loginUser, persistAuth } from '../services/authApi'
 
 const loginFields = [
   {
     id: 'email',
     label: 'Email',
-    defaultValue: 'example@gmail.com',
     icon: Mail,
     type: 'email',
   },
   {
     id: 'password',
     label: 'Password',
-    defaultValue: '***********',
     icon: KeyRound,
     type: 'password',
     showPasswordIcon: true,
@@ -21,14 +21,46 @@ const loginFields = [
 ]
 
 function Login() {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const [form, setForm] = useState({ email: '', password: '' })
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const updateField = (event) => {
+    setForm((values) => ({ ...values, [event.target.name]: event.target.value }))
+  }
+
+  const submit = async (event) => {
+    event.preventDefault()
+    setError('')
+    setLoading(true)
+
+    try {
+      const data = await loginUser(form)
+      persistAuth(data)
+      navigate(location.state?.from?.pathname || '/', { replace: true })
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <AuthLayout title="Sign In">
       <GoogleButton />
       <OrDivider />
 
-      <form>
+      <form onSubmit={submit}>
         {loginFields.map((field) => (
-          <AuthInput key={field.id} {...field} />
+          <AuthInput
+            key={field.id}
+            {...field}
+            name={field.id}
+            value={form[field.id]}
+            onChange={updateField}
+          />
         ))}
 
         <div className="mb-5 mt-3 flex flex-wrap items-center justify-between gap-3 text-xs">
@@ -41,11 +73,18 @@ function Login() {
           </a>
         </div>
 
+        {error && (
+          <div className="mb-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+            {error}
+          </div>
+        )}
+
         <button
-          type="button"
-          className="h-14 w-full rounded-md bg-primary text-lg font-bold text-white transition hover:bg-emerald-600"
+          type="submit"
+          disabled={loading}
+          className="h-14 w-full rounded-md bg-primary text-lg font-bold text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-70"
         >
-          Login
+          {loading ? 'Logging in...' : 'Login'}
         </button>
       </form>
 
