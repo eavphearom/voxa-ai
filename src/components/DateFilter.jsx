@@ -119,25 +119,25 @@ function DateFilter({ value, onChange }) {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-14 z-40 w-[min(92vw,760px)] overflow-hidden rounded-2xl border border-border-soft bg-white shadow-2xl animate-fade-in">
+        <div className="absolute left-0 right-auto top-14 z-40 max-h-[68dvh] w-[calc(100vw-2rem)] overflow-y-auto rounded-2xl border border-border-soft bg-white shadow-2xl animate-fade-in sm:max-h-[calc(100dvh-6rem)] sm:w-[min(92vw,760px)] xl:left-auto xl:right-0">
           <div className="grid md:grid-cols-[190px_1fr]">
-            <aside className="border-b border-border-soft bg-sidebar p-3 md:border-b-0 md:border-r">
+            <aside className="flex gap-1 overflow-x-auto border-b border-border-soft bg-sidebar p-2 md:block md:border-b-0 md:border-r md:p-3">
               {presets.map((preset) => (
                 <button
                   key={preset.label}
                   type="button"
                   onClick={() => setPreset(preset.days)}
-                  className="block w-full rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-slate-700 transition hover:bg-[#EAFBF3] hover:text-primary"
+                  className="shrink-0 rounded-lg px-3 py-2 text-left text-xs font-semibold text-slate-700 transition hover:bg-[#EAFBF3] hover:text-primary md:block md:w-full md:rounded-xl md:py-2.5 md:text-sm"
                 >
                   {preset.label}
                 </button>
               ))}
             </aside>
 
-            <section className="p-4">
-              <div className="mb-4 flex items-center justify-between">
+            <section className="p-3 sm:p-4">
+              <div className="mb-3 flex items-center justify-between sm:mb-4">
                 <div className="flex gap-1">
-                  <button type="button" onClick={() => moveMonth(-2)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Previous two months">
+                  <button type="button" onClick={() => moveMonth(-2)} className="hidden rounded-lg p-2 text-slate-500 hover:bg-slate-100 md:block" aria-label="Previous two months">
                     <ChevronLeft size={17} />
                   </button>
                   <button type="button" onClick={() => moveMonth(-1)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Previous month">
@@ -145,13 +145,14 @@ function DateFilter({ value, onChange }) {
                   </button>
                 </div>
                 <h3 className="text-sm font-semibold text-text-primary">
-                  {monthNames[viewDate.getMonth()]} - {monthNames[rightDate.getMonth()]} {rightDate.getFullYear()}
+                  <span className="md:hidden">{monthNames[viewDate.getMonth()]} {viewDate.getFullYear()}</span>
+                  <span className="hidden md:inline">{monthNames[viewDate.getMonth()]} - {monthNames[rightDate.getMonth()]} {rightDate.getFullYear()}</span>
                 </h3>
                 <div className="flex gap-1">
                   <button type="button" onClick={() => moveMonth(1)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Next month">
                     <ChevronRight size={17} />
                   </button>
-                  <button type="button" onClick={() => moveMonth(2)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Next two months">
+                  <button type="button" onClick={() => moveMonth(2)} className="hidden rounded-lg p-2 text-slate-500 hover:bg-slate-100 md:block" aria-label="Next two months">
                     <ChevronRight size={17} />
                   </button>
                 </div>
@@ -159,7 +160,9 @@ function DateFilter({ value, onChange }) {
 
               <div className="grid gap-6 md:grid-cols-2">
                 <MonthGrid date={viewDate} range={value} onChoose={chooseDate} />
-                <MonthGrid date={rightDate} range={value} onChoose={chooseDate} />
+                <div className="hidden md:block">
+                  <MonthGrid date={rightDate} range={value} onChoose={chooseDate} />
+                </div>
               </div>
             </section>
           </div>
@@ -179,7 +182,7 @@ function MonthGrid({ date, range, onChoose }) {
           <span key={`${day}-${index}`}>{day}</span>
         ))}
       </div>
-      <div className="grid grid-cols-7 gap-1 text-center">
+      <div className="grid grid-cols-7 gap-0.5 text-center sm:gap-1">
         {days.map((day) => {
           const selected = day.value === range.start || day.value === range.end
           const inRange = day.value > range.start && day.value < range.end
@@ -188,7 +191,7 @@ function MonthGrid({ date, range, onChoose }) {
               key={day.value}
               type="button"
               onClick={() => onChoose(day.value)}
-              className={`h-9 rounded-full text-sm transition ${
+              className={`h-8 rounded-full text-sm transition sm:h-9 ${
                 selected
                   ? 'bg-primary font-bold text-white shadow-sm'
                   : inRange

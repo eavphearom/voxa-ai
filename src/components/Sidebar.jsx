@@ -26,8 +26,8 @@ import Logo from './Logo'
 import UserDropdown from './UserDropdown'
 
 const navLinkClass = ({ isActive }) =>
-  `flex items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] font-semibold transition-all duration-200 ease-in-out ${
-    isActive ? 'bg-primary text-white shadow-sm' : 'text-text-primary hover:bg-white hover:shadow-sm'
+  `flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] font-semibold transition-all duration-200 ease-in-out ${
+    isActive ? 'bg-primary text-white shadow-sm' : 'text-text-primary hover:bg-[#EAFBF3] hover:text-primary'
   }`
 
 function Sidebar({
@@ -281,42 +281,68 @@ function Sidebar({
     <>
       {mobileOpen && <button type="button" className="fixed inset-0 z-40 bg-black/30 lg:hidden" onClick={onCloseMobile} aria-label="Close menu overlay" />}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-[250px] flex-col border-r border-border-soft bg-sidebar p-4 transition-transform duration-300 lg:z-40 ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-[250px] flex-col border-r border-border-soft bg-sidebar p-4 transition-[width,transform] duration-300 ease-in-out lg:z-40 ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         } ${collapsed ? 'lg:w-[84px]' : 'lg:w-[250px]'}`}
       >
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex min-h-10 items-center justify-center">
         <div className={collapsed ? 'lg:hidden' : ''}><Logo /></div>
-        <div className={`hidden ${collapsed ? 'lg:flex' : ''} h-8 w-8 items-center justify-center rounded-md bg-primary text-sm font-bold text-white`}>V</div>
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={onToggleCollapse} className="hidden rounded-md p-1 hover:bg-white lg:block" aria-label="Toggle sidebar">
-            {collapsed ? <PanelLeftOpen size={17} className="text-text-secondary" /> : <PanelLeftClose size={17} className="text-text-secondary" />}
+        <SidebarTooltip enabled={collapsed} label="Expand sidebar">
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            className={`group relative hidden h-10 w-12 items-center justify-center rounded-lg transition hover:bg-[#EAFBF3] focus:outline-none focus:ring-4 focus:ring-primary/15 ${collapsed ? 'lg:flex' : ''}`}
+            aria-label="Expand sidebar"
+          >
+            <Logo compact className="transition duration-200 group-hover:opacity-20" />
+            <PanelLeftOpen size={19} className="absolute text-primary opacity-0 transition duration-200 group-hover:opacity-100 group-focus:opacity-100" />
           </button>
-          <button type="button" onClick={onCloseMobile} className="rounded-md p-1 hover:bg-white lg:hidden" aria-label="Close menu">
-            <X size={18} />
-          </button>
-        </div>
+        </SidebarTooltip>
+        <button
+          type="button"
+          onClick={onToggleCollapse}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          className={`absolute -right-[18px] top-5 z-20 hidden h-9 w-9 items-center justify-center rounded-xl border border-border-soft bg-white text-text-secondary shadow-[0_4px_14px_rgba(17,24,39,0.12)] transition-all duration-200 hover:border-primary hover:bg-[#EAFBF3] hover:text-primary hover:shadow-md focus:outline-none focus:ring-4 focus:ring-primary/15 ${collapsed ? 'lg:hidden' : 'lg:flex'}`}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+        </button>
+        <button
+          type="button"
+          onClick={onCloseMobile}
+          className="absolute right-4 top-5 flex h-9 w-9 items-center justify-center rounded-xl border border-border-soft bg-white text-text-secondary shadow-sm transition hover:border-primary hover:bg-[#EAFBF3] hover:text-primary lg:hidden"
+          aria-label="Close menu"
+        >
+          <X size={18} />
+        </button>
       </div>
 
       <div className="sidebar-scroll min-h-0 flex-1 overflow-y-auto pr-1">
         <nav className="relative z-40 space-y-2">
-          <NavLink to="/" className={navLinkClass}>
-            <Grid2X2 size={18} />
-            <span className={labelClass}>Home</span>
-          </NavLink>
-          <button
-            type="button"
-            onClick={() => toggleSection('voxa')}
-            className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-[15px] font-semibold transition-all duration-200 ${
-              location.pathname.startsWith('/voxa-ai') ? 'bg-primary text-white shadow-sm' : 'text-text-primary hover:bg-white hover:shadow-sm'
-            }`}
-          >
-            <span className="flex items-center gap-3">
-              <MessageSquareText size={18} />
-              <span className={labelClass}>VOXA AI</span>
-            </span>
-            {!collapsed && (openSections.voxa ? <ChevronUp size={15} /> : <ChevronDown size={15} />)}
-          </button>
+          <SidebarTooltip enabled={collapsed} label="Home">
+            <NavLink
+              to="/"
+              className={(state) => `${navLinkClass(state)} ${collapsed ? 'lg:justify-center lg:px-0' : ''}`}
+            >
+              <Grid2X2 size={18} />
+              <span className={labelClass}>Home</span>
+            </NavLink>
+          </SidebarTooltip>
+          <SidebarTooltip enabled={collapsed} label="VOXA AI">
+            <button
+              type="button"
+              onClick={() => toggleSection('voxa')}
+              className={`flex w-full items-center rounded-xl px-3 py-2.5 text-[15px] font-semibold transition-all duration-200 ${collapsed ? 'lg:justify-center lg:px-0' : 'justify-between'} ${
+                location.pathname.startsWith('/voxa-ai') ? 'bg-primary text-white shadow-sm' : 'text-text-primary hover:bg-[#EAFBF3] hover:text-primary'
+              }`}
+            >
+              <span className="flex items-center gap-3">
+                <MessageSquareText size={18} />
+                <span className={labelClass}>VOXA AI</span>
+              </span>
+              {!collapsed && (openSections.voxa ? <ChevronUp size={15} /> : <ChevronDown size={15} />)}
+            </button>
+          </SidebarTooltip>
           {openSections.voxa && !collapsed && (
             <div className="relative z-50 space-y-1 pl-4 animate-fade-in">
               <button
@@ -367,21 +393,23 @@ function Sidebar({
       <div className="relative z-10 mt-6">
         <p className={`mb-3 text-[11px] font-medium uppercase text-text-secondary ${labelClass}`}>Communication</p>
         <div className="space-y-1 text-[15px] font-semibold text-text-primary">
-          <button
-            type="button"
-            onClick={() => setFolderModal({ open: true, mode: 'create', folder: null })}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-[15px] font-semibold text-primary transition-all duration-200 hover:bg-white hover:shadow-sm"
-          >
-            <FolderPlus size={17} />
-            <span className={`truncate ${labelClass}`}>Create New Folder</span>
-          </button>
-          {foldersLoading && (
+          <SidebarTooltip enabled={collapsed} label="Create new folder">
+            <button
+              type="button"
+              onClick={() => setFolderModal({ open: true, mode: 'create', folder: null })}
+              className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-[15px] font-semibold text-primary transition-all duration-200 hover:bg-[#EAFBF3] ${collapsed ? 'lg:justify-center lg:px-0' : ''}`}
+            >
+              <FolderPlus size={17} />
+              <span className={`truncate ${labelClass}`}>Create New Folder</span>
+            </button>
+          </SidebarTooltip>
+          {foldersLoading && !collapsed && (
             <p className="px-3 py-2 text-xs font-medium text-text-secondary">Loading folders...</p>
           )}
-          {(foldersError || folderActionError) && (
+          {(foldersError || folderActionError) && !collapsed && (
             <p className="px-3 py-2 text-xs font-medium text-red-500">{folderActionError || foldersError}</p>
           )}
-          {!foldersLoading && !foldersError && folderItems.length === 0 && (
+          {!collapsed && !foldersLoading && !foldersError && folderItems.length === 0 && (
             <p className="px-3 py-2 text-xs font-medium text-text-secondary">No folders yet</p>
           )}
           {folderItems.map((item) => {
@@ -389,25 +417,26 @@ function Sidebar({
             const isOpen = openSections[item.id]
             return (
               <div key={item.id} className="relative">
-                <NavLink
-                  to={item.path}
-                  onClick={() => {
-                    toggleSection(item.id)
-                    if (!isOpen) {
-                      Promise.resolve(onLoadFolderMeetings?.(item.id)).catch((error) => {
-                        console.error('Load folder meetings failed:', error)
-                        setFolderActionError(error.message)
-                      })
-                    }
-                  }}
-                  className="group flex w-full items-center justify-between rounded-xl px-3 py-2 text-[15px] font-semibold transition-all duration-200 hover:bg-white"
-                >
-                  <span className="flex min-w-0 items-center gap-3">
-                    <Icon size={17} />
-                    <span className={`truncate ${labelClass}`}>{item.label}</span>
-                  </span>
-                  {!collapsed && (
-                    <span className="ml-2 flex shrink-0 items-center gap-1">
+                <SidebarTooltip enabled={collapsed} label={item.label}>
+                  <NavLink
+                    to={item.path}
+                    onClick={() => {
+                      toggleSection(item.id)
+                      if (!isOpen) {
+                        Promise.resolve(onLoadFolderMeetings?.(item.id)).catch((error) => {
+                          console.error('Load folder meetings failed:', error)
+                          setFolderActionError(error.message)
+                        })
+                      }
+                    }}
+                    className={`group flex w-full items-center rounded-xl px-3 py-2 text-[15px] font-semibold transition-all duration-200 hover:bg-[#EAFBF3] hover:text-primary ${collapsed ? 'lg:justify-center lg:px-0' : 'justify-between'}`}
+                  >
+                    <span className="flex min-w-0 items-center gap-3">
+                      <Icon size={17} />
+                      <span className={`truncate ${labelClass}`}>{item.label}</span>
+                    </span>
+                    {!collapsed && (
+                      <span className="ml-2 flex shrink-0 items-center gap-1">
                       <button
                         data-sidebar-action-menu
                         type="button"
@@ -435,9 +464,10 @@ function Sidebar({
                         <MoreHorizontal size={16} />
                       </button>
                       {isOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-                    </span>
-                  )}
-                </NavLink>
+                      </span>
+                    )}
+                  </NavLink>
+                </SidebarTooltip>
                 {folderMenuId === item.id && !collapsed && (
                   <div data-sidebar-action-menu className="absolute left-10 right-0 top-11 z-50 rounded-2xl border border-border-soft bg-white p-2 text-text-primary shadow-lg animate-fade-in">
                     <button
@@ -545,18 +575,20 @@ function Sidebar({
           <Settings size={15} />
           <span className={labelClass}>Settings</span>
         </NavLink> */}
-        <button
-          data-sidebar-profile-trigger
-          type="button"
-          onClick={onToggleDropdown}
-          className="flex w-full items-center gap-3 rounded-xl bg-white p-3 text-left transition hover:shadow-sm"
-        >
-          <img src={authUser.avatar} alt={authUser.name} className="h-8 w-8 rounded-full object-cover" />
-          <span className={`min-w-0 ${labelClass}`}>
-            <span className="block text-sm font-semibold text-text-primary">{authUser.name}</span>
-            <span className="block truncate text-xs text-text-secondary">{authUser.email}</span>
-          </span>
-        </button>
+        <SidebarTooltip enabled={collapsed} label={'Profile'}/* label={authUser.name} */ >
+          <button
+            data-sidebar-profile-trigger
+            type="button"
+            onClick={onToggleDropdown}
+            className={`flex w-full items-center gap-3 rounded-xl bg-white p-3 text-left transition hover:bg-[#EAFBF3] hover:shadow-sm ${collapsed ? 'lg:justify-center lg:px-0' : ''}`}
+          >
+            <img src={authUser.avatar} alt={authUser.name} className="h-8 w-8 rounded-full object-cover" />
+            <span className={`min-w-0 ${labelClass}`}>
+              <span className="block text-sm font-semibold text-text-primary">{authUser.name}</span>
+              <span className="block truncate text-xs text-text-secondary">{authUser.email}</span>
+            </span>
+          </button>
+        </SidebarTooltip>
       </div>
 
       {dropdownOpen && <UserDropdown user={authUser} onProfile={onOpenProfile} onLogout={onLogout} onClose={onCloseDropdown} />}
@@ -598,6 +630,42 @@ function Sidebar({
       onConfirm={confirmHistoryDelete}
     />
     </>
+  )
+}
+
+function SidebarTooltip({ enabled, label, children }) {
+  const [position, setPosition] = useState(null)
+
+  const showTooltip = (element) => {
+    if (!enabled) return
+    const rect = element.getBoundingClientRect()
+    setPosition({
+      left: rect.right + 12,
+      top: Math.max(8, Math.min(rect.top, window.innerHeight - 44)),
+    })
+  }
+
+  return (
+    <div
+      className="relative flex w-full justify-center"
+      onMouseEnter={(event) => showTooltip(event.currentTarget)}
+      onMouseLeave={() => setPosition(null)}
+      onFocusCapture={(event) => showTooltip(event.currentTarget)}
+      onBlurCapture={() => setPosition(null)}
+    >
+      {children}
+      {enabled && position && createPortal(
+        <span
+          role="tooltip"
+          className="pointer-events-none fixed z-[3000] whitespace-nowrap rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white shadow-xl animate-fade-in"
+          style={{ left: position.left, top: position.top }}
+        >
+          <span className="absolute -left-1 top-3 h-2 w-2 rotate-45 bg-primary" />
+          {label}
+        </span>,
+        document.body,
+      )}
+    </div>
   )
 }
 

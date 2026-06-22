@@ -23,22 +23,22 @@ function UserDropdown({ user, onProfile, onLogout, onClose }) {
   }, [onClose])
 
   return (
-    <div ref={dropdownRef} className="absolute bottom-20 left-3 z-30 w-56 rounded-lg border border-border-soft bg-white p-3 shadow-xl">
-      <div className="mb-3 flex items-center gap-3 border-b border-border-soft pb-3">
+    <div ref={dropdownRef} className="absolute bottom-20 left-2 z-30 w-52 rounded-xl border border-border-soft bg-white p-2 shadow-[0_12px_32px_rgba(17,24,39,0.14)] animate-fade-in">
+      <div className="mb-1 flex items-center gap-2.5 border-b border-border-soft px-2 pb-2 pt-1">
         <img
           src={user?.avatar || DEFAULT_AVATAR}
           alt={`${user?.name || 'User'} profile`}
-          className="h-11 w-11 rounded-full object-cover"
+          className="h-9 w-9 rounded-full object-cover"
         />
         <div className="min-w-0">
           <p className="truncate text-xs font-semibold text-text-primary">{user?.name || 'User'}</p>
-          <p className="truncate text-[11px] text-text-secondary">{user?.email || 'No email'}</p>
+          <p className="mt-0.5 truncate text-[10px] text-text-secondary">{user?.email || 'No email'}</p>
         </div>
       </div>
       <button
         type="button"
         onClick={onProfile}
-        className="flex w-full items-center justify-between rounded-md px-2 py-2 text-xs font-medium text-text-primary hover:bg-sidebar"
+        className="flex h-9 w-full items-center justify-between rounded-lg px-2.5 text-xs font-medium text-text-primary transition hover:bg-[#EAFBF3] hover:text-primary"
       >
         <span className="flex items-center gap-2">
           <UserRound size={15} />
@@ -46,14 +46,16 @@ function UserDropdown({ user, onProfile, onLogout, onClose }) {
         </span>
         <ChevronRight size={14} />
       </button>
-      <button
-        type="button"
-        onClick={onLogout}
-        className="mt-2 flex w-full items-center gap-2 rounded-md bg-red-500 px-2 py-2 text-xs font-semibold text-white hover:bg-red-600"
-      >
-        <LogOut size={15} />
-        Log Out
-      </button>
+      <div className="mt-1 border-t border-border-soft pt-1">
+        <button
+          type="button"
+          onClick={onLogout}
+          className="flex h-9 w-full items-center gap-2 rounded-lg px-2.5 text-xs font-semibold text-red-500 transition hover:bg-red-50"
+        >
+          <LogOut size={15} />
+          Log Out
+        </button>
+      </div>
     </div>
   )
 }
