@@ -1,28 +1,29 @@
 import {
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   Edit3,
   Folder,
+  FolderInput,
+  FolderMinus,
   FolderPlus,
   Grid2X2,
-  HelpCircle,
   MessageSquareText,
   MoreHorizontal,
   Pencil,
   PanelLeftClose,
   PanelLeftOpen,
   Share2,
-  Settings,
   Trash2,
   X,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import ConfirmDialog from './ConfirmDialog'
 import FolderModal from './FolderModal'
 import Logo from './Logo'
 import UserDropdown from './UserDropdown'
-import { communicationItems, recentItems } from '../data/mockData'
 
 const navLinkClass = ({ isActive }) =>
   `flex items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] font-semibold transition-all duration-200 ease-in-out ${
@@ -34,6 +35,7 @@ function Sidebar({
   mobileOpen,
   collapsed,
   onToggleDropdown,
+  onCloseDropdown,
   onOpenProfile,
   onCloseMobile,
   onToggleCollapse,
@@ -41,9 +43,24 @@ function Sidebar({
   authUser,
   generalChats = [],
   chatsLoading = false,
+  meetings = [],
+  meetingsLoading = false,
+  folders = [],
+  foldersLoading = false,
+  foldersError = '',
+  folderMeetings = {},
+  folderMeetingsLoading = {},
   onCreateGeneralChat,
   onRenameGeneralChat,
   onDeleteGeneralChat,
+  onRenameMeeting,
+  onDeleteMeeting,
+  onCreateFolder,
+  onRenameFolder,
+  onDeleteFolder,
+  onLoadFolderMeetings,
+  onAddMeetingToFolder,
+  onRemoveMeetingFromFolder,
 }) {
   const navigate = useNavigate()
   const location = useLocation()
@@ -53,43 +70,48 @@ function Sidebar({
     'project-discussions': true,
     recent: true,
   })
-  const [folderItems, setFolderItems] = useState(communicationItems)
   const [folderModal, setFolderModal] = useState({ open: false, mode: 'create', folder: null })
   const [historyRename, setHistoryRename] = useState({ open: false, type: null, item: null })
   const [historyDelete, setHistoryDelete] = useState({ open: false, type: null, item: null })
-  const [meetingHistoryItems, setMeetingHistoryItems] = useState(recentItems)
   const [folderMenuId, setFolderMenuId] = useState(null)
   const [historyMenuId, setHistoryMenuId] = useState(null)
+  const [historyFolderLoadingId, setHistoryFolderLoadingId] = useState(null)
+  const [historyFolderError, setHistoryFolderError] = useState('')
   const [deleteFolder, setDeleteFolder] = useState(null)
+  const [folderActionError, setFolderActionError] = useState('')
+  const folderItems = folders.map((folder) => ({
+    ...folder,
+    label: folder.name,
+    path: `/communication/${folder.id}`,
+    children: (folderMeetings[folder.id] || []).map((meeting) => ({
+      id: meeting.id,
+      label: meeting.title,
+      path: `/meeting/${meeting.id}`,
+    })),
+  }))
+  const meetingHistoryItems = meetings.map((meeting) => ({
+    id: meeting.id,
+    label: meeting.title,
+    path: `/meeting/${meeting.id}`,
+  }))
 
   const toggleSection = (id) => {
     setOpenSections((sections) => ({ ...sections, [id]: !sections[id] }))
   }
 
-  const slugify = (value) => value.toLowerCase().trim().replace(/\s+/g, '-')
-
-  const submitFolder = (name) => {
-    if (folderModal.mode === 'rename') {
-      setFolderItems((folders) =>
-        folders.map((folder) =>
-          folder.id === folderModal.folder.id
-            ? { ...folder, label: name, path: `/communication/${slugify(name)}` }
-            : folder,
-        ),
-      )
-    } else {
-      setFolderItems((folders) => [
-        {
-          id: `custom-${Date.now()}`,
-          label: name,
-          type: 'single',
-          path: `/communication/${slugify(name)}`,
-          children: [],
-        },
-        ...folders,
-      ])
+  const submitFolder = async (name) => {
+    setFolderActionError('')
+    try {
+      if (folderModal.mode === 'rename') {
+        await onRenameFolder?.(folderModal.folder.id, name)
+      } else {
+        await onCreateFolder?.(name)
+      }
+      setFolderModal({ open: false, mode: 'create', folder: null })
+    } catch (error) {
+      console.error('Save folder API failed:', error)
+      setFolderActionError(error.message)
     }
-    setFolderModal({ open: false, mode: 'create', folder: null })
   }
 
   const shareFolder = async (folder) => {
@@ -103,10 +125,15 @@ function Sidebar({
     setFolderMenuId(null)
   }
 
-  const confirmDeleteFolder = () => {
-    setFolderItems((folders) => folders.filter((folder) => folder.id !== deleteFolder.id))
-    setDeleteFolder(null)
-    setFolderMenuId(null)
+  const confirmDeleteFolder = async () => {
+    try {
+      await onDeleteFolder?.(deleteFolder.id)
+      setDeleteFolder(null)
+      setFolderMenuId(null)
+    } catch (error) {
+      console.error('Delete folder API failed:', error)
+      setFolderActionError(error.message)
+    }
   }
 
   const submitHistoryRename = (name) => {
@@ -115,22 +142,25 @@ function Sidebar({
     }
 
     if (historyRename.type === 'meeting') {
-      setMeetingHistoryItems((items) =>
-        items.map((item) => (item.id === historyRename.item.id ? { ...item, label: name } : item)),
-      )
+      onRenameMeeting?.(historyRename.item.id, name)
     }
 
     setHistoryRename({ open: false, type: null, item: null })
     setHistoryMenuId(null)
   }
 
-  const confirmHistoryDelete = () => {
+  const confirmHistoryDelete = async () => {
     if (historyDelete.type === 'chat') {
       onDeleteGeneralChat?.(historyDelete.item.id)
     }
 
     if (historyDelete.type === 'meeting') {
-      setMeetingHistoryItems((items) => items.filter((item) => item.id !== historyDelete.item.id))
+      try {
+        await onDeleteMeeting?.(historyDelete.item.id)
+      } catch (error) {
+        console.error('Delete meeting API failed:', error)
+        return
+      }
     }
 
     setHistoryDelete({ open: false, type: null, item: null })
@@ -146,6 +176,65 @@ function Sidebar({
       window.alert(`Share this link: ${link}`)
     }
     setHistoryMenuId(null)
+  }
+
+  const toggleMeetingMenu = async (item) => {
+    const menuId = `meeting-${item.id}`
+    if (historyMenuId === menuId) {
+      setHistoryMenuId(null)
+      return
+    }
+
+    setHistoryMenuId(menuId)
+    setHistoryFolderError('')
+    setHistoryFolderLoadingId(item.id)
+    try {
+      await Promise.all(folders.map((folder) => onLoadFolderMeetings?.(folder.id)))
+    } catch (error) {
+      console.error('Load meeting folder membership failed:', error)
+      setHistoryFolderError(error.message)
+    } finally {
+      setHistoryFolderLoadingId(null)
+    }
+  }
+
+  const moveMeetingToFolder = async (meetingId, targetFolderId) => {
+    setHistoryFolderLoadingId(meetingId)
+    setHistoryFolderError('')
+    const currentFolderIds = folders
+      .filter((folder) => (folderMeetings[folder.id] || []).some((meeting) => meeting.id === meetingId))
+      .map((folder) => folder.id)
+
+    try {
+      if (!currentFolderIds.includes(targetFolderId)) {
+        await onAddMeetingToFolder?.(targetFolderId, meetingId)
+      }
+      await Promise.all(
+        currentFolderIds
+          .filter((folderId) => folderId !== targetFolderId)
+          .map((folderId) => onRemoveMeetingFromFolder?.(folderId, meetingId)),
+      )
+      setHistoryMenuId(null)
+    } catch (error) {
+      console.error('Move meeting to folder failed:', error)
+      setHistoryFolderError(error.message)
+    } finally {
+      setHistoryFolderLoadingId(null)
+    }
+  }
+
+  const removeMeetingFromFolder = async (meetingId, folderId) => {
+    setHistoryFolderLoadingId(meetingId)
+    setHistoryFolderError('')
+    try {
+      await onRemoveMeetingFromFolder?.(folderId, meetingId)
+      setHistoryMenuId(null)
+    } catch (error) {
+      console.error('Remove meeting from folder failed:', error)
+      setHistoryFolderError(error.message)
+    } finally {
+      setHistoryFolderLoadingId(null)
+    }
   }
 
   const labelClass = collapsed ? 'lg:hidden' : ''
@@ -286,14 +375,31 @@ function Sidebar({
             <FolderPlus size={17} />
             <span className={`truncate ${labelClass}`}>Create New Folder</span>
           </button>
+          {foldersLoading && (
+            <p className="px-3 py-2 text-xs font-medium text-text-secondary">Loading folders...</p>
+          )}
+          {(foldersError || folderActionError) && (
+            <p className="px-3 py-2 text-xs font-medium text-red-500">{folderActionError || foldersError}</p>
+          )}
+          {!foldersLoading && !foldersError && folderItems.length === 0 && (
+            <p className="px-3 py-2 text-xs font-medium text-text-secondary">No folders yet</p>
+          )}
           {folderItems.map((item) => {
-            const Icon = item.type === 'single' ? FolderPlus : Folder
+            const Icon = Folder
             const isOpen = openSections[item.id]
             return (
               <div key={item.id} className="relative">
                 <NavLink
                   to={item.path}
-                  onClick={() => item.children.length && toggleSection(item.id)}
+                  onClick={() => {
+                    toggleSection(item.id)
+                    if (!isOpen) {
+                      Promise.resolve(onLoadFolderMeetings?.(item.id)).catch((error) => {
+                        console.error('Load folder meetings failed:', error)
+                        setFolderActionError(error.message)
+                      })
+                    }
+                  }}
                   className="group flex w-full items-center justify-between rounded-xl px-3 py-2 text-[15px] font-semibold transition-all duration-200 hover:bg-white"
                 >
                   <span className="flex min-w-0 items-center gap-3">
@@ -328,7 +434,7 @@ function Sidebar({
                       >
                         <MoreHorizontal size={16} />
                       </button>
-                      {!!item.children.length && (isOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />)}
+                      {isOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
                     </span>
                   )}
                 </NavLink>
@@ -363,8 +469,14 @@ function Sidebar({
                     </button>
                   </div>
                 )}
-                {!!item.children.length && isOpen && !collapsed && (
+                {isOpen && !collapsed && (
                   <div className="ml-8 mt-1 space-y-1">
+                    {folderMeetingsLoading[item.id] && (
+                      <p className="px-3 py-1.5 text-xs text-text-secondary">Loading meetings...</p>
+                    )}
+                    {!folderMeetingsLoading[item.id] && item.children.length === 0 && (
+                      <p className="px-3 py-1.5 text-xs text-text-secondary">No meetings</p>
+                    )}
                     {item.children.map((child) => (
                       <NavLink key={child.id} to={child.path} className="block rounded-lg px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:bg-white">
                         {child.label}
@@ -385,6 +497,12 @@ function Sidebar({
         </button>
         {openSections.recent && !collapsed && (
           <div className="space-y-1">
+            {meetingsLoading && (
+              <p className="px-3 py-2 text-xs font-medium text-text-secondary">Loading meetings...</p>
+            )}
+            {!meetingsLoading && meetingHistoryItems.length === 0 && (
+              <p className="px-3 py-2 text-xs font-medium text-text-secondary">No meeting history</p>
+            )}
             {meetingHistoryItems.map((item) => (
               <HistoryNavItem
                 key={item.id}
@@ -392,7 +510,7 @@ function Sidebar({
                 label={item.label}
                 to={item.path}
                 menuOpen={historyMenuId === `meeting-${item.id}`}
-                onToggleMenu={() => setHistoryMenuId((value) => (value === `meeting-${item.id}` ? null : `meeting-${item.id}`))}
+                onToggleMenu={() => toggleMeetingMenu(item)}
                 onShare={() => shareItem(item.path, item.label)}
                 onRename={() => {
                   setHistoryRename({ open: true, type: 'meeting', item })
@@ -404,6 +522,13 @@ function Sidebar({
                 }}
                 renameLabel="Rename history"
                 deleteLabel="Delete history"
+                folders={folders}
+                folderMeetings={folderMeetings}
+                folderLoading={historyFolderLoadingId === item.id}
+                folderError={historyFolderError}
+                meetingId={item.id}
+                onMoveToFolder={moveMeetingToFolder}
+                onRemoveFromFolder={removeMeetingFromFolder}
               />
             ))}
           </div>
@@ -412,16 +537,16 @@ function Sidebar({
       </div>
 
       <div className="mt-4 shrink-0 space-y-2 border-t border-border-soft pt-3">
-        <button type="button" className="flex w-full items-center gap-3 rounded-xl bg-white px-3 py-2.5 text-[15px] font-semibold text-text-primary transition hover:shadow-sm">
+        {/* <button type="button" className="flex w-full items-center gap-3 rounded-xl bg-white px-3 py-2.5 text-[15px] font-semibold text-text-primary transition hover:shadow-sm">
           <HelpCircle size={15} />
           <span className={labelClass}>Help</span>
-        </button>
-        <NavLink to="/settings" className="flex items-center gap-3 rounded-xl bg-white px-3 py-2.5 text-[15px] font-semibold text-text-primary transition hover:shadow-sm">
+        </button> */}
+        {/* <NavLink to="/settings" className="flex items-center gap-3 rounded-xl bg-white px-3 py-2.5 text-[15px] font-semibold text-text-primary transition hover:shadow-sm">
           <Settings size={15} />
           <span className={labelClass}>Settings</span>
-        </NavLink>
+        </NavLink> */}
         <button
-          data-sidebar-action-menu
+          data-sidebar-profile-trigger
           type="button"
           onClick={onToggleDropdown}
           className="flex w-full items-center gap-3 rounded-xl bg-white p-3 text-left transition hover:shadow-sm"
@@ -434,7 +559,7 @@ function Sidebar({
         </button>
       </div>
 
-      {dropdownOpen && <UserDropdown user={authUser} onProfile={onOpenProfile} onLogout={onLogout} />}
+      {dropdownOpen && <UserDropdown user={authUser} onProfile={onOpenProfile} onLogout={onLogout} onClose={onCloseDropdown} />}
     </aside>
     <FolderModal
       key={`${folderModal.mode}-${folderModal.folder?.id || 'new'}`}
@@ -447,7 +572,7 @@ function Sidebar({
     <ConfirmDialog
       open={!!deleteFolder}
       title="Delete folder?"
-      message={`Are you sure you want to delete "${deleteFolder?.label}"? This only removes it from the sidebar demo state.`}
+      message={`Are you sure you want to delete "${deleteFolder?.label}"?`}
       confirmLabel="Delete"
       onCancel={() => setDeleteFolder(null)}
       onConfirm={confirmDeleteFolder}
@@ -487,7 +612,31 @@ function HistoryNavItem({
   onDelete,
   renameLabel,
   deleteLabel,
+  folders,
+  folderMeetings,
+  folderLoading,
+  folderError,
+  meetingId,
+  onMoveToFolder,
+  onRemoveFromFolder,
 }) {
+  const moveButtonRef = useRef(null)
+  const [folderPopupPosition, setFolderPopupPosition] = useState(null)
+
+  const openFolderPopup = () => {
+    const rect = moveButtonRef.current?.getBoundingClientRect()
+    if (!rect) return
+
+    const popupWidth = 240
+    const spaceOnRight = window.innerWidth - rect.right
+    setFolderPopupPosition({
+      left: spaceOnRight >= popupWidth + 16
+        ? rect.right + 8
+        : Math.max(8, rect.left - popupWidth - 8),
+      top: Math.max(8, Math.min(rect.top, window.innerHeight - 330)),
+    })
+  }
+
   return (
     <div className={`relative ${menuOpen ? 'z-[999]' : 'z-0'}`}>
       <NavLink
@@ -514,7 +663,7 @@ function HistoryNavItem({
       </NavLink>
 
       {menuOpen && (
-        <div data-sidebar-action-menu className="absolute right-0 top-full z-[1000] mt-2 w-[205px] rounded-2xl border border-border-soft bg-white p-2 text-text-primary shadow-xl animate-fade-in">
+        <div data-sidebar-action-menu className={`absolute top-full z-[1000] mt-2 max-h-[min(420px,70vh)] overflow-y-auto rounded-2xl border border-border-soft bg-white p-2 text-text-primary shadow-xl animate-fade-in ${meetingId ? 'left-0 right-auto w-full' : 'right-0 w-[205px]'}`}>
           <button
             type="button"
             onClick={onShare}
@@ -531,6 +680,21 @@ function HistoryNavItem({
             <Pencil size={17} />
             {renameLabel}
           </button>
+          {meetingId && (
+            <div className="my-1 border-y border-border-soft py-1">
+              <button
+                ref={moveButtonRef}
+                type="button"
+                onMouseEnter={openFolderPopup}
+                onFocus={openFolderPopup}
+                onClick={openFolderPopup}
+                className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-[15px] font-semibold transition hover:bg-[#EAFBF3] hover:text-primary"
+              >
+                <span className="flex items-center gap-3"><FolderInput size={17} />Move to</span>
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          )}
           <button
             type="button"
             onClick={onDelete}
@@ -540,6 +704,34 @@ function HistoryNavItem({
             {deleteLabel}
           </button>
         </div>
+      )}
+
+      {menuOpen && meetingId && folderPopupPosition && createPortal(
+        <div
+          data-sidebar-action-menu
+          className="fixed z-[2000] max-h-[320px] w-60 overflow-y-auto rounded-2xl border border-border-soft bg-white p-2 text-text-primary shadow-xl animate-fade-in"
+          style={{ left: folderPopupPosition.left, top: folderPopupPosition.top }}
+        >
+          <p className="px-3 py-2 text-[11px] font-semibold uppercase text-text-secondary">Choose folder</p>
+          {folderLoading && <p className="px-3 py-2 text-xs text-text-secondary">Loading folders...</p>}
+          {!folderLoading && folders.length === 0 && <p className="px-3 py-2 text-xs text-text-secondary">No folders available</p>}
+          {!folderLoading && folders.map((folder) => {
+            const isInFolder = (folderMeetings[folder.id] || []).some((meeting) => meeting.id === meetingId)
+            return (
+              <button
+                key={folder.id}
+                type="button"
+                onClick={() => isInFolder ? onRemoveFromFolder(meetingId, folder.id) : onMoveToFolder(meetingId, folder.id)}
+                className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${isInFolder ? 'text-red-500 hover:bg-red-50' : 'text-text-primary hover:bg-[#EAFBF3] hover:text-primary'}`}
+              >
+                {isInFolder ? <FolderMinus size={17} /> : <FolderInput size={17} />}
+                <span className="truncate">{isInFolder ? `Remove from ${folder.name}` : folder.name}</span>
+              </button>
+            )
+          })}
+          {folderError && <p className="px-3 py-2 text-xs font-medium text-red-500">{folderError}</p>}
+        </div>,
+        document.body,
       )}
     </div>
   )

@@ -1,5 +1,5 @@
 import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 const presets = [
   { label: 'Today', days: 0 },
@@ -59,6 +59,25 @@ const buildMonthDays = (year, month) => {
 function DateFilter({ value, onChange }) {
   const [open, setOpen] = useState(false)
   const [viewDate, setViewDate] = useState(new Date('2026-05-01'))
+  const filterRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return undefined
+
+    const closeOutside = (event) => {
+      if (!filterRef.current?.contains(event.target)) setOpen(false)
+    }
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+
+    document.addEventListener('pointerdown', closeOutside)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOutside)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [open])
 
   const rightDate = useMemo(() => new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 1), [viewDate])
 
@@ -89,7 +108,7 @@ function DateFilter({ value, onChange }) {
   const displayText = `${formatDisplay(value.start)} - ${formatDisplay(value.end)}`
 
   return (
-    <div className="relative w-full sm:w-auto">
+    <div ref={filterRef} className="relative w-full sm:w-auto">
       <button
         type="button"
         onClick={() => setOpen((state) => !state)}

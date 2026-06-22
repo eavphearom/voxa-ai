@@ -2,7 +2,8 @@ import { KeyRound, Mail } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import AuthLayout, { AuthInput, GoogleButton, OrDivider } from '../components/AuthLayout'
-import { loginUser, persistAuth } from '../services/authApi'
+import { googleLoginUser, loginUser, persistAuth } from '../services/authApi'
+import { getGoogleCredential } from '../services/googleIdentity'
 
 const loginFields = [
   {
@@ -25,6 +26,7 @@ function Login() {
   const location = useLocation()
   const [form, setForm] = useState({ email: '', password: '' })
   const [loading, setLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
   const [error, setError] = useState('')
 
   const updateField = (event) => {
@@ -47,9 +49,25 @@ function Login() {
     }
   }
 
+  const loginWithGoogle = async () => {
+    setError('')
+    setGoogleLoading(true)
+
+    try {
+      const credential = await getGoogleCredential()
+      const data = await googleLoginUser({ credential })
+      persistAuth(data)
+      navigate(location.state?.from?.pathname || '/', { replace: true })
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setGoogleLoading(false)
+    }
+  }
+
   return (
     <AuthLayout title="Sign In">
-      <GoogleButton />
+      <GoogleButton onClick={loginWithGoogle} loading={googleLoading} disabled={loading} />
       <OrDivider />
 
       <form onSubmit={submit}>
@@ -81,7 +99,7 @@ function Login() {
 
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || googleLoading}
           className="h-14 w-full rounded-md bg-primary text-lg font-bold text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-70"
         >
           {loading ? 'Logging in...' : 'Login'}

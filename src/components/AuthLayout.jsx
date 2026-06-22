@@ -1,8 +1,7 @@
-import { Eye, EyeOff } from 'lucide-react'
-import { useState } from 'react'
-import heroImg from '../assets/hero.png'
-import Logo from './Logo'
-
+import { Eye, EyeOff } from "lucide-react";
+import { useState } from "react";
+import Logo from "./Logo";
+import { FcGoogle } from "react-icons/fc";
 function AuthLayout({ title, children }) {
   return (
     <main className="min-h-screen bg-white px-5 py-6 text-text-primary sm:px-8">
@@ -14,9 +13,9 @@ function AuthLayout({ title, children }) {
             <div className="absolute left-5 top-16 h-28 w-28 rounded-full bg-pink-300 shadow-[inset_0_0_0_8px_rgba(255,255,255,0.25)]" />
             <div className="absolute left-12 top-24 h-16 w-16 rounded-full border-[10px] border-white/60" />
             <img
-              src={heroImg}
+              src='images/login.png'
               alt="VOXA account security illustration"
-              className="relative z-10 w-[430px] max-w-full"
+              className="relative z-10 w-[500px] max-w-full"
             />
           </div>
         </div>
@@ -29,28 +28,30 @@ function AuthLayout({ title, children }) {
         </div>
       </section>
     </main>
-  )
+  );
 }
 
 export function AuthInput({
   icon: Icon,
   label,
   defaultValue,
-  type = 'text',
+  type = "text",
   showPasswordIcon = false,
   name,
   value,
   onChange,
   required = true,
 }) {
-  const [visible, setVisible] = useState(false)
-  const inputType = showPasswordIcon ? (visible ? 'text' : 'password') : type
+  const [visible, setVisible] = useState(false);
+  const inputType = showPasswordIcon ? (visible ? "text" : "password") : type;
 
   return (
     <label className="mb-4 flex h-14 items-center gap-4 rounded-md bg-zinc-100 px-4 transition focus-within:ring-4 focus-within:ring-primary/15">
       <Icon size={22} className="shrink-0 text-zinc-700" />
       <span className="min-w-0 flex-1">
-        <span className="block text-[10px] font-medium text-text-secondary">{label}</span>
+        <span className="block text-[10px] font-medium text-text-secondary">
+          {label}
+        </span>
         <input
           name={name}
           type={inputType}
@@ -66,25 +67,27 @@ export function AuthInput({
           type="button"
           onClick={() => setVisible((value) => !value)}
           className="shrink-0 rounded-md p-1 text-zinc-800 transition hover:bg-white"
-          aria-label={visible ? 'Hide password' : 'Show password'}
+          aria-label={visible ? "Hide password" : "Show password"}
         >
           {visible ? <EyeOff size={17} /> : <Eye size={17} />}
         </button>
       )}
     </label>
-  )
+  );
 }
 
-export function GoogleButton() {
+export function GoogleButton({ onClick, loading = false, disabled = false }) {
   return (
     <button
       type="button"
-      className="flex h-14 w-full items-center justify-center gap-4 rounded-md bg-white text-sm font-medium text-text-secondary shadow-[0_8px_24px_rgba(17,24,39,0.12)] transition hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(17,24,39,0.16)]"
+      onClick={onClick}
+      disabled={disabled || loading}
+      className="flex h-14 w-full items-center justify-center gap-4 rounded-md bg-white text-sm font-medium text-text-secondary shadow-[0_8px_24px_rgba(17,24,39,0.12)] transition hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(17,24,39,0.16)] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
     >
-      <span className="text-2xl font-bold text-blue-500">G</span>
-      Login with Google
+      <FcGoogle size={24} className={loading ? "animate-pulse" : ""} />
+      {loading ? "Signing in with Google..." : "Login with Google"}
     </button>
-  )
+  );
 }
 
 export function OrDivider() {
@@ -94,7 +97,7 @@ export function OrDivider() {
       OR
       <span className="h-px flex-1 bg-border-soft" />
     </div>
-  )
+  );
 }
 
-export default AuthLayout
+export default AuthLayout;

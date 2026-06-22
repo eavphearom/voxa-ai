@@ -1,33 +1,117 @@
 import { ArrowLeft, Bot, CalendarDays, ChevronDown, Clock3, Edit3, Expand, Plus, Share2, X } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import AudioPlayer from '../components/AudioPlayer'
 import ChatInput from '../components/ChatInput'
 import ChatMessage from '../components/ChatMessage'
+import TranscriptView from '../components/TranscriptView'
 import {
-  getMeetingById,
-  staticAiReply,
-  suggestions,
-  summaryData,
-  transcriptItems,
-} from '../data/mockData'
+  buildMediaUrl,
+  createChatMessage,
+  getChatDetail,
+  getMeetingDetail,
+  normalizeChat,
+  normalizeCreatedMessage,
+} from '../services/authApi'
 
 function MeetingDetail() {
   const { id } = useParams()
-  const meeting = getMeetingById(id)
-
-  return <MeetingDetailContent key={meeting.id} meeting={meeting} />
+  return <MeetingDetailContent key={id} meetingId={id} />
 }
 
-function MeetingDetailContent({ meeting }) {
+function MeetingDetailContent({ meetingId }) {
+  const [meeting, setMeeting] = useState(null)
+  const [meetingChat, setMeetingChat] = useState(null)
+  const [generalChat, setGeneralChat] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [tab, setTab] = useState('Summary')
   const [assistantOpen, setAssistantOpen] = useState(false)
-  const [chatHistories, setChatHistories] = useState(() => meeting.chats || [])
-  const [activeChatId, setActiveChatId] = useState(() => meeting.chats?.[0]?.id || null)
+  const [chatHistories, setChatHistories] = useState([])
+  const [activeChatId, setActiveChatId] = useState(null)
+  const [statusRefresh, setStatusRefresh] = useState(0)
   const activeChat = chatHistories.find((chat) => chat.id === activeChatId) || chatHistories[0]
 
+  useEffect(() => {
+    let ignore = false
+
+    async function loadMeetingGeneralChat() {
+      setChatHistories([])
+      setActiveChatId(null)
+      setLoading(true)
+      setError('')
+
+      try {
+        const meetingResponse = await getMeetingDetail(meetingId)
+        const payload = meetingResponse.data?.data || meetingResponse.data || meetingResponse
+        const nextMeeting = payload.meeting || null
+        const nextMeetingChat = payload.meeting_chat || null
+        const nextGeneralChat = payload.general_chat || null
+
+        console.log('Meeting:', nextMeeting)
+        console.log('Meeting Chat:', nextMeetingChat)
+        console.log('General Chat:', nextGeneralChat)
+
+        if (ignore) return
+
+        setMeeting(nextMeeting)
+        setMeetingChat(nextMeetingChat)
+        setGeneralChat(nextGeneralChat)
+
+        if (!nextGeneralChat?.id) {
+          console.error('Meeting detail response does not contain general_chat.id:', meetingResponse)
+          return
+        }
+
+        const chatResponse = await getChatDetail(nextGeneralChat.id)
+        if (ignore) return
+
+        const chat = normalizeChat(chatResponse, {
+          id: String(nextGeneralChat.id),
+          title: nextGeneralChat.title,
+          messages: [],
+        })
+        setChatHistories([chat])
+        setActiveChatId(chat.id)
+      } catch (error) {
+        console.error('Load meeting general chat failed:', error)
+        if (!ignore) {
+          setError(error.message)
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false)
+        }
+      }
+    }
+
+    loadMeetingGeneralChat()
+    return () => {
+      ignore = true
+    }
+  }, [meetingId, statusRefresh])
+
+  useEffect(() => {
+    if (!meeting?.id || !isProcessingStatus(meeting.status)) return undefined
+
+    const timer = window.setInterval(async () => {
+      try {
+        const response = await getMeetingDetail(meeting.id)
+        const payload = response.data?.data || response.data || response
+        setMeeting(payload.meeting || null)
+        setMeetingChat(payload.meeting_chat || null)
+        setGeneralChat(payload.general_chat || null)
+      } catch (pollError) {
+        console.error('Poll meeting status failed:', pollError)
+        setError(pollError.message)
+      }
+    }, 4000)
+
+    return () => window.clearInterval(timer)
+  }, [meeting?.id, meeting?.status])
+
   const shareMeeting = async () => {
-    const link = `${window.location.origin}/meeting/${meeting.id}`
+    const link = `${window.location.origin}/meeting/${meeting?.id || meetingId}`
     try {
       await navigator.clipboard.writeText(link)
       window.alert('Meeting link copied to clipboard.')
@@ -36,28 +120,42 @@ function MeetingDetailContent({ meeting }) {
     }
   }
 
-  const sendAssistantMessage = (message) => {
-    const targetChatId = activeChat?.id || createNewChat()
-    setChatHistories((histories) =>
-      histories.map((chat) =>
-        chat.id === targetChatId
-          ? appendAssistantMessages(chat, message)
-          : chat,
-      ),
-    )
+  const sendAssistantMessage = async (payload) => {
+    if (!generalChat?.id) {
+      throw new Error('This meeting does not have a general chat yet.')
+    }
+
+    const generalChatId = String(generalChat.id)
+    const message = typeof payload === 'string' ? payload : payload.message || ''
+    const attachments = typeof payload === 'string' ? [] : payload.attachments || []
+    const response = await createChatMessage(generalChatId, { message, attachments })
+
+    try {
+      const chatResponse = await getChatDetail(generalChatId)
+      const chat = normalizeChat(chatResponse, activeChat || {
+        id: generalChatId,
+        title: generalChat.title,
+      })
+      setChatHistories([chat])
+      setActiveChatId(chat.id)
+    } catch (refreshError) {
+      console.error('Refresh meeting general chat failed:', refreshError)
+      setChatHistories((histories) =>
+        histories.map((chat) =>
+          chat.id === String(generalChatId)
+            ? { ...chat, messages: normalizeCreatedMessage(response, chat.messages) }
+            : chat,
+        ),
+      )
+    }
   }
 
   const createNewChat = () => {
-    const id = `${meeting.id}-chat-${chatHistories.length + 1}`
-    const newChat = {
-      id,
-      title: `New Chat ${chatHistories.length + 1}`,
-      updatedAt: 'Now',
-      messages: [],
+    // A meeting owns one API-provided General Chat; this action simply reopens it.
+    if (generalChat?.id) {
+      setActiveChatId(String(generalChat.id))
     }
-    setChatHistories((histories) => [newChat, ...histories])
-    setActiveChatId(id)
-    return id
+    return generalChat?.id || null
   }
 
   return (
@@ -74,13 +172,42 @@ function MeetingDetailContent({ meeting }) {
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-8 md:px-10">
-          <h1 className="text-2xl font-semibold text-text-primary md:text-3xl">{meeting.title}</h1>
-          <p className="mt-2 max-w-2xl text-sm text-text-secondary">{meeting.summaryPreview}</p>
+          <h1 className="text-2xl font-semibold text-text-primary md:text-3xl">
+            {meeting?.title || 'Loading meeting...'}
+          </h1>
+          {meeting?.file_name && (
+            <p className="mt-2 max-w-2xl text-sm text-text-secondary">{meeting.file_name}</p>
+          )}
           <div className="mt-5 flex flex-wrap gap-5 text-sm font-medium text-text-primary">
-            <span className="flex items-center gap-2"><CalendarDays size={17} />{meeting.date}</span>
-            <span>{meeting.time}</span>
-            <span className="flex items-center gap-2"><Clock3 size={17} />{meeting.duration}</span>
+            {meeting?.created_at && (
+              <span className="flex items-center gap-2">
+                <CalendarDays size={17} />
+                {formatCreatedAt(meeting.created_at)}
+              </span>
+            )}
+            {meeting?.status && (
+              <span className="flex items-center gap-2 capitalize">
+                <Clock3 size={17} />
+                {meeting.status}
+              </span>
+            )}
+            {meeting?.language && <span className="uppercase">Language: {meeting.language}</span>}
+            {meeting?.duration != null && <span>Duration: {formatDuration(meeting.duration)}</span>}
           </div>
+
+          {isProcessingStatus(meeting?.status) && <MeetingProcessingStatus status={meeting.status} />}
+          {meeting?.status === 'failed' && (
+            <div className="mt-5 flex items-center justify-between gap-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+              <span>Meeting processing failed.</span>
+              <button type="button" onClick={() => setStatusRefresh((value) => value + 1)} className="font-semibold underline">Retry</button>
+            </div>
+          )}
+
+          {error && (
+            <div className="mt-6 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+              {error}
+            </div>
+          )}
 
           <div className="mt-8 flex items-center justify-between border-b border-border-soft">
             <div className="flex gap-5 overflow-x-auto">
@@ -97,22 +224,39 @@ function MeetingDetailContent({ meeting }) {
                 </button>
               ))}
             </div>
-            <button type="button" className="hidden items-center gap-2 text-sm font-semibold transition hover:text-primary md:flex">
+            {/* <button type="button" className="hidden items-center gap-2 text-sm font-semibold transition hover:text-primary md:flex">
               <Edit3 size={17} />
               Edit Transcript
-            </button>
+            </button> */}
           </div>
 
           <div className="mt-6">
-            {tab === 'Summary' && <SummaryTab />}
-            {tab === 'Transcript' && <TranscriptTab />}
-            {tab === 'Insights' && <InsightsTab meeting={meeting} />}
+            {loading ? (
+              <div className="rounded-2xl border border-border-soft bg-white p-6 text-sm text-text-secondary">
+                Loading meeting detail...
+              </div>
+            ) : (
+              <>
+                {tab === 'Summary' && (
+                  <SummaryTab meeting={meeting} meetingChat={meetingChat} generalChat={generalChat} />
+                )}
+                {tab === 'Transcript' && <TranscriptTab transcript={meetingChat?.transcript} />}
+                {tab === 'Insights' && (
+                  <InsightsTab meeting={meeting} meetingChat={meetingChat} generalChat={generalChat} />
+                )}
+              </>
+            )}
           </div>
         </div>
 
-        <div className="shrink-0 border-t border-border-soft bg-white p-3 md:px-10">
-          <AudioPlayer />
-        </div>
+        {!loading && (
+          <div className="shrink-0 border-t border-border-soft bg-white p-3 md:px-10">
+            <AudioPlayer
+              src={buildMediaUrl(meeting?.file_path)}
+              fileName={meeting?.file_name}
+            />
+          </div>
+        )}
       </section>
 
       <aside className="hidden h-screen flex-col bg-white lg:sticky lg:top-0 lg:flex">
@@ -160,20 +304,6 @@ function MeetingDetailContent({ meeting }) {
   )
 }
 
-function appendAssistantMessages(chat, message) {
-  const nextIndex = chat.messages.length + 1
-
-  return {
-    ...chat,
-    updatedAt: 'Now',
-    messages: [
-      ...chat.messages,
-      { id: `${chat.id}-user-${nextIndex}`, role: 'user', message, createdAt: 'Now' },
-      { id: `${chat.id}-ai-${nextIndex + 1}`, role: 'ai', message: staticAiReply, createdAt: 'Now' },
-    ],
-  }
-}
-
 function AssistantPanel({ chats, activeChatId, messages, onNewChat, onSelectChat, onSend, onClose }) {
   return (
     <>
@@ -201,18 +331,6 @@ function AssistantPanel({ chats, activeChatId, messages, onNewChat, onSelectChat
         </div>
       </header>
       <div key={activeChatId} className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain p-5 sm:p-6 animate-fade-in">
-        <div className="flex flex-wrap gap-2">
-          {suggestions.map((suggestion) => (
-            <button
-              key={suggestion}
-              onClick={() => onSend(suggestion)}
-              className="rounded-full bg-slate-100 px-4 py-2 text-xs font-semibold transition hover:bg-[#EAFBF3] hover:text-primary"
-              type="button"
-            >
-              {suggestion}
-            </button>
-          ))}
-        </div>
         {messages.length === 0 && (
           <div className="rounded-2xl border border-dashed border-border-soft p-5 text-center">
             <p className="text-sm font-semibold text-text-primary">Start a new AI chat</p>
@@ -272,54 +390,47 @@ function ChatHistoryDropdown({ chats, activeChatId, onSelectChat }) {
   )
 }
 
-function SummaryTab() {
+function SummaryTab({ meeting, meetingChat, generalChat }) {
   return (
     <div className="space-y-5 text-sm leading-7 text-text-primary">
       <section className="rounded-2xl border border-border-soft bg-white p-5 shadow-sm">
-        <h3 className="mb-2 text-base font-semibold">AI overview</h3>
-        <p>{summaryData.overview}</p>
+        <h3 className="mb-3 text-base font-semibold">Meeting information</h3>
+        <dl className="grid gap-3 sm:grid-cols-2">
+          <DetailField label="Title" value={meeting?.title} />
+          <DetailField label="File name" value={meeting?.file_name} />
+          <DetailField label="Status" value={meeting?.status} />
+          <DetailField label="Created at" value={formatCreatedAt(meeting?.created_at)} />
+        </dl>
       </section>
-      <section className="rounded-2xl border border-border-soft bg-white p-5 shadow-sm">
-        <h3 className="mb-2 text-base font-semibold">Action items</h3>
-        <ul className="list-disc space-y-2 pl-5">
-          {summaryData.actionItems.map((item) => <li key={item}>{item}</li>)}
-        </ul>
-      </section>
-      <section className="rounded-2xl border border-border-soft bg-white p-5 shadow-sm">
-        <h3 className="mb-2 text-base font-semibold">Key decisions</h3>
-        <ul className="list-disc space-y-2 pl-5">
-          {summaryData.decisions.map((item) => <li key={item}>{item}</li>)}
-        </ul>
-      </section>
+      {/* <section className="rounded-2xl border border-border-soft bg-white p-5 shadow-sm">
+        <h3 className="mb-3 text-base font-semibold">Meeting chats</h3>
+        <dl className="grid gap-3 sm:grid-cols-2">
+          <DetailField label="Meeting chat ID" value={meetingChat?.id} />
+          <DetailField label="Meeting chat title" value={meetingChat?.title} />
+          <DetailField label="General chat ID" value={generalChat?.id} />
+          <DetailField label="General chat title" value={generalChat?.title} />
+        </dl>
+      </section> */}
     </div>
   )
 }
 
-function TranscriptTab() {
+function TranscriptTab({ transcript }) {
   return (
-    <div className="space-y-5">
-      {transcriptItems.map((line) => (
-        <div key={line.id} className="grid gap-4 rounded-2xl border border-border-soft bg-white p-5 shadow-sm sm:grid-cols-[36px_1fr]">
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-xs font-bold text-white">{line.code}</span>
-          <div>
-            <div className="mb-2 flex flex-wrap items-center gap-3">
-              <h3 className="font-semibold">{line.speaker}</h3>
-              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-text-secondary">{line.timestamp}</span>
-            </div>
-            <p className="text-sm leading-7 text-text-primary">{line.text}</p>
-          </div>
-        </div>
-      ))}
-    </div>
+    <section className="rounded-2xl border border-border-soft bg-white p-5 shadow-sm">
+      <TranscriptView transcript={transcript} />
+    </section>
   )
 }
 
-function InsightsTab({ meeting }) {
+function InsightsTab({ meeting, meetingChat, generalChat }) {
   const insights = [
-    ['Detected languages', summaryData.languages.join(', ')],
-    ['Keywords', summaryData.keywords.join(', ')],
-    ['Speaker count', `${meeting.speakers || summaryData.speakerCount} speakers`],
-    ['Duration', meeting.duration || summaryData.duration],
+    ['Meeting status', meeting?.status],
+    ['File name', meeting?.file_name],
+    ['Language', meeting?.language],
+    ['Duration', formatDuration(meeting?.duration)],
+    ['Meeting chat ID', meetingChat?.id],
+    ['General chat', generalChat?.title],
   ]
 
   return (
@@ -330,6 +441,49 @@ function InsightsTab({ meeting }) {
           <p className="mt-2 font-semibold text-text-primary">{value}</p>
         </div>
       ))}
+    </div>
+  )
+}
+
+function DetailField({ label, value }) {
+  return (
+    <div>
+      <dt className="text-xs font-semibold text-text-secondary">{label}</dt>
+      <dd className="mt-1 break-words font-medium text-text-primary">{value || '-'}</dd>
+    </div>
+  )
+}
+
+function formatCreatedAt(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString()
+}
+
+function formatDuration(value) {
+  const seconds = Number(value)
+  if (!Number.isFinite(seconds)) return value || '-'
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const remaining = Math.floor(seconds % 60)
+  return [hours ? `${hours}h` : '', minutes ? `${minutes}m` : '', `${remaining}s`].filter(Boolean).join(' ')
+}
+
+function isProcessingStatus(status) {
+  return ['processing', 'uploaded', 'transcribing', 'analyzing'].includes(status)
+}
+
+function MeetingProcessingStatus({ status }) {
+  const labels = {
+    processing: 'Processing meeting...',
+    uploaded: 'Preparing meeting...',
+    transcribing: 'Transcribing audio...',
+    analyzing: 'Detecting speakers...',
+  }
+  return (
+    <div className="mt-5 flex items-center gap-3 rounded-xl border border-primary/20 bg-[#EAFBF3] px-4 py-3 text-sm font-medium text-text-primary">
+      <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+      {labels[status] || 'Processing meeting...'}
     </div>
   )
 }

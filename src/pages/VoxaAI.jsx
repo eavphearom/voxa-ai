@@ -34,10 +34,19 @@ function VoxaAI() {
 
   const buildFallbackMessages = (targetChatId, items, message, attachments, waitForApi) => {
       const nextIndex = items.length + 1
-      const attachmentLabel = attachments.length
-        ? `Attachment: ${attachments.map((file) => file.name).join(', ')}`
-        : ''
-      const userMessage = message || attachmentLabel
+      const localAttachments = attachments.map((file, index) => {
+        const isImage = file.type.startsWith('image/') || /\.(png|jpe?g|gif|webp)$/i.test(file.name)
+
+        return {
+          id: `${targetChatId}-attachment-${nextIndex}-${index}`,
+          name: file.name,
+          type: file.type,
+          url: '',
+          previewUrl: isImage ? URL.createObjectURL(file) : '',
+          isImage,
+        }
+      })
+      const userMessage = message || ''
       const aiMessage = waitForApi
         ? {
             id: `${targetChatId}-ai-${nextIndex + 1}`,
@@ -55,7 +64,13 @@ function VoxaAI() {
 
       return [
         ...items,
-        { id: `${targetChatId}-user-${nextIndex}`, role: 'user', message: userMessage, createdAt: 'Now' },
+        {
+          id: `${targetChatId}-user-${nextIndex}`,
+          role: 'user',
+          message: userMessage,
+          attachments: localAttachments,
+          createdAt: 'Now',
+        },
         aiMessage,
       ]
   }
@@ -71,7 +86,11 @@ function VoxaAI() {
     }
 
     updateGeneralChatMessages(targetChatId, (items) =>
-      buildFallbackMessages(targetChatId, items, message, attachments, shouldUseApi),
+      {
+        const nextMessages = buildFallbackMessages(targetChatId, items, message, attachments, shouldUseApi)
+        console.log('Message state after optimistic send:', nextMessages)
+        return nextMessages
+      },
     )
 
     if (!shouldUseApi) {
@@ -81,7 +100,11 @@ function VoxaAI() {
     try {
       const data = await createChatMessage(targetChatId, { message, attachments })
       updateGeneralChatMessages(targetChatId, (items) =>
-        normalizeCreatedMessage(data, items),
+        {
+          const nextMessages = normalizeCreatedMessage(data, items)
+          console.log('Message state after API response:', nextMessages)
+          return nextMessages
+        },
       )
     } catch (error) {
       console.error('Create chat message API failed:', error)
