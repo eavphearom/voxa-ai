@@ -1,6 +1,16 @@
 import { FileText, Image, Plus, Send, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
+const allowedAttachmentTypes = new Set([
+  'image/png',
+  'image/jpg',
+  'image/jpeg',
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain',
+])
+const allowedAttachmentExtensions = new Set(['png', 'jpg', 'jpeg', 'pdf', 'docx', 'txt'])
+
 function ChatInput({ onSend, placeholder = 'Ask anything about your conversation' }) {
   const [value, setValue] = useState('')
   const [attachOpen, setAttachOpen] = useState(false)
@@ -22,23 +32,115 @@ function ChatInput({ onSend, placeholder = 'Ask anything about your conversation
     }
   }, [])
 
-  const handleFileSelect = (event) => {
-    const file = event.target.files?.[0]
-    event.target.value = ''
+  const getFileExtension = (file) => {
+    const nameExtension = file.name?.split('.').pop()?.toLowerCase()
 
-    if (!file) return
+    if (nameExtension) {
+      return nameExtension
+    }
 
-    setAttachments((items) => [
-      ...items,
-      {
-        id: `${file.name}-${file.lastModified}`,
-        file,
-        name: file.name,
-        type: file.type,
-        previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : '',
-      },
-    ])
+    if (file.type === 'image/jpeg') return 'jpg'
+    if (file.type === 'image/png') return 'png'
+    if (file.type === 'application/pdf') return 'pdf'
+    if (file.type === 'text/plain') return 'txt'
+    if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+      return 'docx'
+    }
+
+    return ''
+  }
+
+  const isAllowedAttachment = (file) => {
+    const extension = getFileExtension(file)
+    return allowedAttachmentTypes.has(file.type) || allowedAttachmentExtensions.has(extension)
+  }
+
+  const getFileKey = (file) => `${file.name || file.type}-${file.size}`
+
+  const uniqueFiles = (files) => {
+    const seen = new Set()
+
+    return files.filter((file) => {
+      const key = getFileKey(file)
+
+      if (seen.has(key)) {
+        return false
+      }
+
+      seen.add(key)
+      return true
+    })
+  }
+
+  const prepareAttachment = (file) => {
+    const extension = getFileExtension(file)
+    const fallbackName = file.type.startsWith('image/')
+      ? `pasted-image-${Date.now()}.${extension || 'png'}`
+      : `pasted-file-${Date.now()}${extension ? `.${extension}` : ''}`
+    const normalizedFile = file.name
+      ? file
+      : new File([file], fallbackName, { type: file.type || 'application/octet-stream' })
+
+    return {
+      id: `${normalizedFile.name}-${normalizedFile.lastModified}-${normalizedFile.size}`,
+      file: normalizedFile,
+      name: normalizedFile.name,
+      type: normalizedFile.type,
+      previewUrl: normalizedFile.type.startsWith('image/') ? URL.createObjectURL(normalizedFile) : '',
+    }
+  }
+
+  const addFiles = (files) => {
+    const allowedFiles = uniqueFiles(files.filter(isAllowedAttachment))
+
+    if (!allowedFiles.length) return
+
+    setAttachments((items) => {
+      const existingKeys = new Set(items.map((attachment) => getFileKey(attachment.file)))
+      const newFiles = allowedFiles.filter((file) => !existingKeys.has(getFileKey(file)))
+      const nextAttachments = newFiles.map(prepareAttachment)
+
+      if (!nextAttachments.length) {
+        return items
+      }
+
+      return [...items, ...nextAttachments]
+    })
     setAttachOpen(false)
+  }
+
+  const handleFileSelect = (event) => {
+    const files = Array.from(event.target.files || [])
+    event.target.value = ''
+    addFiles(files)
+  }
+
+  const handlePaste = (event) => {
+    // Clipboard files can arrive as DataTransferItem objects or plain File objects,
+    // depending on browser/source. We normalize both paths into the same attachment flow.
+    const clipboardItems = Array.from(event.clipboardData?.items || [])
+    const itemFiles = clipboardItems
+      .filter((item) => item.kind === 'file')
+      .map((item) => item.getAsFile())
+      .filter(Boolean)
+    const clipboardFiles = Array.from(event.clipboardData?.files || [])
+    // Some browsers expose the same pasted file through both items and files.
+    // Deduping by file name + size prevents one Ctrl+V image from creating two previews.
+    const pastedFiles = uniqueFiles([...itemFiles, ...clipboardFiles])
+
+    // Clipboard text should paste into the textarea normally. Only intercept supported files/images.
+    if (!pastedFiles.length) {
+      return
+    }
+
+    const acceptedFiles = pastedFiles.filter(isAllowedAttachment)
+
+    if (!acceptedFiles.length) {
+      return
+    }
+
+    event.preventDefault()
+    addFiles(acceptedFiles)
   }
 
   const removeAttachment = (id) => {
@@ -128,12 +230,17 @@ function ChatInput({ onSend, placeholder = 'Ask anything about your conversation
               <label className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-text-primary transition hover:bg-[#EAFBF3] hover:text-primary">
                 <Image size={18} />
                 Choose image
-                <input type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
+                <input type="file" accept="image/png,image/jpg,image/jpeg" className="hidden" onChange={handleFileSelect} />
               </label>
               <label className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-text-primary transition hover:bg-[#EAFBF3] hover:text-primary">
                 <FileText size={18} />
                 Choose file
-                <input type="file" className="hidden" onChange={handleFileSelect} />
+                <input
+                  type="file"
+                  accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+                  className="hidden"
+                  onChange={handleFileSelect}
+                />
               </label>
             </div>
           )}
@@ -142,6 +249,7 @@ function ChatInput({ onSend, placeholder = 'Ask anything about your conversation
           rows="1"
           value={value}
           disabled={sending}
+          onPaste={handlePaste}
           onChange={(event) => setValue(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'Enter' && !event.shiftKey) {

@@ -1,7 +1,8 @@
-import { Check, Copy } from 'lucide-react'
+import { Check, Copy, FileText } from 'lucide-react'
 import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import ImagePreviewModal from './ImagePreviewModal'
 
 function MarkdownCodeBlock({ className = '', children, ...props }) {
   const [copied, setCopied] = useState(false)
@@ -96,13 +97,31 @@ const markdownComponents = {
 function ChatMessage({ message }) {
   const isUser = message.role === 'user'
   const text = message.message || message.text
+  const attachments = message.attachments || []
+  const hasAttachments = attachments.length > 0
+  const imageAttachments = attachments.filter(isImageAttachment)
+  const fileAttachments = attachments.filter((attachment) => !isImageAttachment(attachment))
+  const [previewIndex, setPreviewIndex] = useState(null)
+
+  const openImagePreview = (attachment) => {
+    const index = imageAttachments.findIndex((image) => (image.id || image.name) === (attachment.id || attachment.name))
+    setPreviewIndex(index >= 0 ? index : 0)
+  }
+
+  const closeImagePreview = () => setPreviewIndex(null)
+  const showPreviousImage = () =>
+    setPreviewIndex((index) => (index === null ? null : (index - 1 + imageAttachments.length) % imageAttachments.length))
+  const showNextImage = () =>
+    setPreviewIndex((index) => (index === null ? null : (index + 1) % imageAttachments.length))
 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div
         className={
           isUser
-            ? 'max-w-[76%] rounded-full bg-slate-100 px-7 py-3.5 text-base font-semibold leading-7 text-text-primary'
+            ? `max-w-[76%] bg-slate-100 px-7 py-3.5 text-base font-semibold leading-7 text-text-primary ${
+                hasAttachments ? 'rounded-2xl' : 'rounded-full'
+              }`
             : `max-w-3xl text-base leading-8 ${
                 message.error
                   ? 'rounded-2xl border border-red-100 bg-red-50 px-5 py-3.5 text-red-600'
@@ -112,6 +131,28 @@ function ChatMessage({ message }) {
               }`
         }
       >
+        {hasAttachments && (
+          <div className="mb-3 space-y-3">
+            {imageAttachments.length > 0 && (
+              <div className="flex max-w-full flex-nowrap gap-2 overflow-x-auto pb-1">
+                {imageAttachments.map((attachment) => (
+                  <ImageAttachmentPreview
+                    key={attachment.id || attachment.name}
+                    attachment={attachment}
+                    onImageClick={openImagePreview}
+                  />
+                ))}
+              </div>
+            )}
+            {fileAttachments.length > 0 && (
+              <div className="space-y-2">
+                {fileAttachments.map((attachment) => (
+                  <FileAttachmentPreview key={attachment.id || attachment.name} attachment={attachment} />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         {!isUser && !message.pending && !message.error && (
           <div className="markdown-body max-w-none break-words text-base leading-8 text-text-primary">
             <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
@@ -121,7 +162,72 @@ function ChatMessage({ message }) {
         )}
         {(isUser || message.pending || message.error) && text}
       </div>
+      {previewIndex !== null && (
+        <ImagePreviewModal
+          images={imageAttachments}
+          currentIndex={previewIndex}
+          onClose={closeImagePreview}
+          onPrevious={showPreviousImage}
+          onNext={showNextImage}
+        />
+      )}
     </div>
+  )
+}
+
+function isImageAttachment(attachment) {
+  const previewUrl = attachment.previewUrl || attachment.url
+  const name = attachment.name || previewUrl?.split('/').pop() || 'Attachment'
+  const type = String(attachment.type || '').toLowerCase()
+
+  return Boolean(
+    previewUrl &&
+      (attachment.isImage ||
+        type.startsWith('image/') ||
+        type === 'image' ||
+        /\.(png|jpe?g|gif|webp)(\?.*)?$/i.test(name || previewUrl || '')),
+  )
+}
+
+function ImageAttachmentPreview({ attachment, onImageClick }) {
+  const previewUrl = attachment.previewUrl || attachment.url
+  const name = attachment.name || previewUrl?.split('/').pop() || 'Attachment'
+
+  return (
+    <button
+      type="button"
+      onClick={() => onImageClick(attachment)}
+      className="group block shrink-0 cursor-pointer overflow-hidden rounded-xl"
+      aria-label={`Preview ${name}`}
+    >
+      <img
+        src={previewUrl}
+        alt={name}
+        className="h-auto max-h-[220px] w-auto max-w-[280px] rounded-xl object-cover transition duration-300 group-hover:scale-[1.03]"
+      />
+    </button>
+  )
+}
+
+function FileAttachmentPreview({ attachment }) {
+  const previewUrl = attachment.previewUrl || attachment.url
+  const name = attachment.name || previewUrl?.split('/').pop() || 'Attachment'
+
+  return (
+    <a
+      href={attachment.url || undefined}
+      target={attachment.url ? '_blank' : undefined}
+      rel={attachment.url ? 'noreferrer' : undefined}
+      className="flex max-w-sm items-center gap-3 rounded-xl border border-border-soft bg-white/80 p-3 text-left transition hover:bg-white"
+    >
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sidebar text-text-secondary">
+        <FileText size={20} />
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate text-sm font-semibold text-text-primary">{name}</span>
+        <span className="block text-xs font-medium text-text-secondary">Attached file</span>
+      </span>
+    </a>
   )
 }
 

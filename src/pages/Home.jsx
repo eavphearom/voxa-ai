@@ -1,22 +1,59 @@
 import { ChevronDown, ChevronUp, Inbox } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useOutletContext } from 'react-router-dom'
 import ConfirmDialog from '../components/ConfirmDialog'
 import ImportModal from '../components/ImportModal'
 import MeetingCard from '../components/MeetingCard'
-import StatsCard from '../components/StatsCard'
 import TopBar from '../components/TopBar'
-import { groupMeetingsByDate, meetings as initialMeetings, stats } from '../data/mockData'
+import { groupMeetingsByDate } from '../data/mockData'
+import { extractMeetingPayload } from '../services/authApi'
+
+const toDateValue = (date) => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
 
 function Home() {
+  const navigate = useNavigate()
+  const {
+    meetings,
+    meetingsLoading,
+    refreshMeetings,
+    deleteMeeting,
+    folders,
+    folderMeetings,
+    loadFolderMeetings,
+    addMeetingToFolder,
+    removeMeetingFromFolder,
+  } = useOutletContext()
   const [search, setSearch] = useState('')
-  const [dateRange, setDateRange] = useState({ start: '2026-05-20', end: '2026-05-21' })
-  const [meetings, setMeetings] = useState(initialMeetings)
+  const [dateRange, setDateRange] = useState(() => {
+    const end = new Date()
+    const start = new Date()
+    start.setDate(end.getDate() - 30)
+    return { start: toDateValue(start), end: toDateValue(end) }
+  })
+  const [dateFilterActive, setDateFilterActive] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [openGroups, setOpenGroups] = useState(() => ({
     'Today, May 2026': true,
     '20 May 2026': true,
   }))
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      refreshMeetings({
+        search: search.trim(),
+        startDate: dateFilterActive ? dateRange.start : '',
+        endDate: dateFilterActive ? dateRange.end : '',
+      }).catch((error) => console.error('Search meetings API failed:', error))
+    }, 350)
+
+    return () => window.clearTimeout(timer)
+  }, [dateFilterActive, dateRange.end, dateRange.start, refreshMeetings, search])
 
   const filteredMeetings = useMemo(() => {
     const term = search.trim().toLowerCase()
@@ -25,16 +62,23 @@ function Home() {
         .join(' ')
         .toLowerCase()
         .includes(term)
-      const matchesDate = meeting.date >= dateRange.start && meeting.date <= dateRange.end
+      const matchesDate =
+        !dateFilterActive ||
+        !meeting.date ||
+        (meeting.date >= dateRange.start && meeting.date <= dateRange.end)
       return matchesSearch && matchesDate
     })
-  }, [dateRange, meetings, search])
+  }, [dateFilterActive, dateRange, meetings, search])
 
   const groupedMeetings = groupMeetingsByDate(filteredMeetings)
 
-  const confirmDelete = () => {
-    setMeetings((items) => items.filter((meeting) => meeting.id !== deleteTarget?.id))
-    setDeleteTarget(null)
+  const confirmDelete = async () => {
+    try {
+      await deleteMeeting(deleteTarget.id)
+      setDeleteTarget(null)
+    } catch (error) {
+      console.error('Delete meeting API failed:', error)
+    }
   }
 
   return (
@@ -43,18 +87,21 @@ function Home() {
         search={search}
         onSearchChange={setSearch}
         dateRange={dateRange}
-        onDateRangeChange={setDateRange}
+        onDateRangeChange={(range) => {
+          setDateRange(range)
+          setDateFilterActive(true)
+        }}
         onImport={() => setImportOpen(true)}
       />
 
-      <section className="mt-10">
+      {/* <section className="mt-10">
         <h2 className="mb-4 text-lg font-semibold text-text-primary">AI Statistics</h2>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {stats.map((stat) => (
             <StatsCard key={stat.id} stat={stat} />
           ))}
         </div>
-      </section>
+      </section> */}
 
       <section className="mt-10 space-y-8">
         <div>
@@ -62,7 +109,11 @@ function Home() {
           <p className="mt-1 text-sm text-text-secondary">Search, import, record, and review multilingual meeting notes.</p>
         </div>
 
-        {groupedMeetings.length > 0 ? (
+        {meetingsLoading ? (
+          <div className="rounded-2xl border border-border-soft bg-white p-8 text-center text-sm font-medium text-text-secondary">
+            Loading meeting history...
+          </div>
+        ) : groupedMeetings.length > 0 ? (
           groupedMeetings.map((group) => (
             <div key={group.label}>
               <button
@@ -76,7 +127,16 @@ function Home() {
               {(openGroups[group.label] ?? true) && (
                 <div className="space-y-4 animate-fade-in">
                   {group.meetings.map((meeting) => (
-                    <MeetingCard key={meeting.id} meeting={meeting} onDelete={() => setDeleteTarget(meeting)} />
+                    <MeetingCard
+                      key={meeting.id}
+                      meeting={meeting}
+                      folders={folders}
+                      folderMeetings={folderMeetings}
+                      onLoadFolderMeetings={loadFolderMeetings}
+                      onAddToFolder={addMeetingToFolder}
+                      onRemoveFromFolder={removeMeetingFromFolder}
+                      onDelete={() => setDeleteTarget(meeting)}
+                    />
                   ))}
                 </div>
               )}
@@ -93,11 +153,19 @@ function Home() {
         )}
       </section>
 
-      <ImportModal open={importOpen} onClose={() => setImportOpen(false)} />
+      <ImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImported={async (response) => {
+          await refreshMeetings()
+          const meetingId = extractMeetingPayload(response).meeting?.id
+          if (meetingId) navigate(`/meeting/${meetingId}`)
+        }}
+      />
       <ConfirmDialog
         open={!!deleteTarget}
         title="Delete meeting?"
-        message={`Are you sure you want to delete "${deleteTarget?.title}"? This only removes it from the current demo list.`}
+        message={`Are you sure you want to delete "${deleteTarget?.title}"?`}
         confirmLabel="Delete"
         onCancel={() => setDeleteTarget(null)}
         onConfirm={confirmDelete}

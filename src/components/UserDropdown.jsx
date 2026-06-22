@@ -1,9 +1,29 @@
 import { ChevronRight, LogOut, UserRound } from 'lucide-react'
+import { useEffect, useRef } from 'react'
 import { DEFAULT_AVATAR } from '../services/authApi'
 
-function UserDropdown({ user, onProfile, onLogout }) {
+function UserDropdown({ user, onProfile, onLogout, onClose }) {
+  const dropdownRef = useRef(null)
+
+  useEffect(() => {
+    const closeOutside = (event) => {
+      if (event.target.closest('[data-sidebar-profile-trigger]')) return
+      if (!dropdownRef.current?.contains(event.target)) onClose?.()
+    }
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') onClose?.()
+    }
+
+    document.addEventListener('pointerdown', closeOutside)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOutside)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [onClose])
+
   return (
-    <div className="absolute bottom-20 left-3 z-30 w-56 rounded-lg border border-border-soft bg-white p-3 shadow-xl">
+    <div ref={dropdownRef} className="absolute bottom-20 left-3 z-30 w-56 rounded-lg border border-border-soft bg-white p-3 shadow-xl">
       <div className="mb-3 flex items-center gap-3 border-b border-border-soft pb-3">
         <img
           src={user?.avatar || DEFAULT_AVATAR}

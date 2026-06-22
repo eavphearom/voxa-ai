@@ -5,6 +5,7 @@ import History from '../pages/History'
 import Home from '../pages/Home'
 import Login from '../pages/Login'
 import MeetingDetail from '../pages/MeetingDetail'
+import Profile from '../pages/Profile'
 import Record from '../pages/Record'
 import Register from '../pages/Register'
 import Settings from '../pages/Settings'
@@ -27,6 +28,7 @@ function AppRoutes() {
             <Route path="/voxa-ai/:chatId" element={<VoxaAI />} />
             <Route path="/record" element={<Record />} />
             <Route path="/meeting/:id" element={<MeetingDetail />} />
+            <Route path="/profile" element={<Profile />} />
             <Route path="/history/:id" element={<History />} />
             <Route path="/communication/:id" element={<Communication />} />
             <Route path="/settings" element={<Settings />} />
