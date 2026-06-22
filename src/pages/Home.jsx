@@ -82,7 +82,7 @@ function Home() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-5 py-8 md:px-10 animate-fade-in">
+    <div className="mx-auto max-w-7xl px-5 pb-8 pt-20 md:px-10 lg:py-8 animate-fade-in">
       <TopBar
         search={search}
         onSearchChange={setSearch}
