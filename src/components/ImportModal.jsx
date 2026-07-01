@@ -182,7 +182,7 @@ function ImportModal({ open, onClose, onImported }) {
 const languageOptions = [
   { label: 'Auto detect', value: '' },
   { label: 'English', value: 'en' },
-  { label: 'Khmer', value: 'km' },
+  // { label: 'Khmer', value: 'km' },
   { label: 'Chinese', value: 'zh' },
 ]
 

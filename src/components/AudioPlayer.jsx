@@ -6,6 +6,7 @@ const playbackRates = [1, 1.25, 1.5, 2, 0.75]
 function AudioPlayer({
   src = '',
   fileName = '',
+  durationHint = 0,
   recording = false,
   paused = false,
   elapsed = '0:00',
@@ -15,7 +16,7 @@ function AudioPlayer({
   const mediaRef = useRef(null)
   const [playing, setPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
-  const [duration, setDuration] = useState(0)
+  const [duration, setDuration] = useState(Number(durationHint) || 0)
   const [playbackRate, setPlaybackRate] = useState(1)
   const [mediaError, setMediaError] = useState('')
   const isVideo = /\.(mp4|mov)(\?.*)?$/i.test(fileName || src)
@@ -26,7 +27,18 @@ function AudioPlayer({
 
     media.pause()
     media.load()
-  }, [src])
+    setCurrentTime(0)
+    setDuration(Number(durationHint) || 0)
+  }, [src, durationHint])
+
+  const updateDuration = (media) => {
+    const metadataDuration = Number(media.duration)
+    setDuration(
+      Number.isFinite(metadataDuration) && metadataDuration > 0
+        ? metadataDuration
+        : Number(durationHint) || 0,
+    )
+  }
 
   const togglePlayback = async () => {
     const media = mediaRef.current
@@ -47,8 +59,38 @@ function AudioPlayer({
   const seek = (value) => {
     const media = mediaRef.current
     if (!media) return
-    media.currentTime = Number(value)
-    setCurrentTime(Number(value))
+
+    const requestedTime = Number(value)
+    if (!Number.isFinite(requestedTime)) return
+
+    const targetTime = Math.min(Math.max(requestedTime, 0), duration || media.duration || 0)
+    const shouldContinuePlaying = !media.paused && !media.ended
+
+    media.currentTime = targetTime
+    setCurrentTime(targetTime)
+
+    if (shouldContinuePlaying) {
+      const playRequest = media.play()
+      playRequest?.catch((error) => {
+        console.error('Media playback failed after seeking:', error)
+        setMediaError('Unable to continue media playback.')
+      })
+    }
+  }
+
+  const replay = async () => {
+    const media = mediaRef.current
+    if (!media) return
+
+    media.currentTime = 0
+    setCurrentTime(0)
+
+    try {
+      await media.play()
+    } catch (error) {
+      console.error('Media replay failed:', error)
+      setMediaError('Unable to replay this media file.')
+    }
   }
 
   const skip = (seconds) => {
@@ -85,9 +127,10 @@ function AudioPlayer({
             preload="metadata"
             playsInline
             onLoadedMetadata={(event) => {
-              setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0)
+              updateDuration(event.currentTarget)
               setMediaError('')
             }}
+            onDurationChange={(event) => updateDuration(event.currentTarget)}
             onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
             onPlay={() => setPlaying(true)}
             onPause={() => setPlaying(false)}
@@ -101,9 +144,10 @@ function AudioPlayer({
             src={src}
             preload="metadata"
             onLoadedMetadata={(event) => {
-              setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0)
+              updateDuration(event.currentTarget)
               setMediaError('')
             }}
+            onDurationChange={(event) => updateDuration(event.currentTarget)}
             onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
             onPlay={() => setPlaying(true)}
             onPause={() => setPlaying(false)}
@@ -129,7 +173,7 @@ function AudioPlayer({
         ) : (
           <>
             <span className="w-10 text-xs text-slate-500">{formatTime(currentTime)}</span>
-            <button type="button" onClick={() => skip(-10)} className="rounded-lg p-1.5 transition hover:bg-slate-100" aria-label="Back 10 seconds">
+            <button type="button" onClick={replay} className="rounded-lg p-1.5 transition hover:bg-slate-100" aria-label="Replay from beginning">
               <RotateCcw size={17} />
             </button>
             <button type="button" onClick={togglePlayback} className="rounded-full p-1.5 transition hover:bg-slate-100" aria-label={playing ? 'Pause' : 'Play'}>
@@ -150,7 +194,7 @@ function AudioPlayer({
           max={duration || 0}
           step="0.1"
           value={Math.min(currentTime, duration || 0)}
-          onChange={(event) => seek(event.target.value)}
+          onChange={(event) => seek(event.currentTarget.value)}
           disabled={recording || !duration}
           className="h-1 min-w-0 flex-1 cursor-pointer accent-primary disabled:cursor-not-allowed"
           aria-label="Media progress"
