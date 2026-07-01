@@ -254,6 +254,7 @@ function MeetingDetailContent({ meetingId }) {
             <AudioPlayer
               src={buildMediaUrl(meeting?.file_path)}
               fileName={meeting?.file_name}
+              durationHint={meeting?.duration}
             />
           </div>
         )}
